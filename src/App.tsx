@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { Account, Profile, Assumptions, IncomeStream } from './types';
-import { DEFAULT_PROFILE, DEFAULT_ASSUMPTIONS, DEFAULT_INCOME_STREAMS } from './utils/constants';
+import { Account, Profile, Assumptions, IncomeStream, WithdrawalStrategySettings } from './types';
+import { DEFAULT_PROFILE, DEFAULT_ASSUMPTIONS, DEFAULT_INCOME_STREAMS, DEFAULT_WITHDRAWAL_STRATEGY } from './utils/constants';
 import { useRetirementCalc } from './hooks/useRetirementCalc';
 import { useLocalStorage, useDarkMode } from './hooks/useLocalStorage';
 import { CountryProvider, useCountry } from './contexts/CountryContext';
@@ -18,6 +18,7 @@ import { ChartIncome } from './components/ChartIncome';
 import { ChartTax } from './components/ChartTax';
 import { ChartComposition } from './components/ChartComposition';
 import { MethodologyPanel } from './components/MethodologyPanel';
+import { WithdrawalStrategyForm } from './components/WithdrawalStrategyForm';
 import { DataTableAccumulation } from './components/DataTableAccumulation';
 import { DataTableWithdrawal } from './components/DataTableWithdrawal';
 import { v4 as uuidv4 } from 'uuid';
@@ -142,6 +143,11 @@ function AppContent() {
     DEFAULT_INCOME_STREAMS
   );
 
+  const [withdrawalStrategy, setWithdrawalStrategy, resetWithdrawalStrategy] = useLocalStorage<WithdrawalStrategySettings>(
+    'retirement-planner-withdrawal-strategy',
+    DEFAULT_WITHDRAWAL_STRATEGY
+  );
+
   // Dark mode
   const [isDarkMode, toggleDarkMode] = useDarkMode();
 
@@ -150,7 +156,7 @@ function AppContent() {
   const [expandedSection, setExpandedSection] = useState<string | null>('accounts');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const { accumulation, retirement } = useRetirementCalc(accounts, profile, assumptions, countryConfig, incomeStreams);
+  const { accumulation, retirement } = useRetirementCalc(accounts, profile, assumptions, countryConfig, incomeStreams, withdrawalStrategy);
 
   const handleAddAccount = (account: Account) => {
     setAccounts(prev => [...prev, account]);
@@ -193,10 +199,11 @@ function AppContent() {
     resetProfile();
     resetAssumptions();
     resetIncomeStreams();
+    resetWithdrawalStrategy();
     setShowResetConfirm(false);
     // Force reload to get fresh default accounts with new UUIDs
     window.location.reload();
-  }, [resetAccounts, resetProfile, resetAssumptions, resetIncomeStreams]);
+  }, [resetAccounts, resetProfile, resetAssumptions, resetIncomeStreams, resetWithdrawalStrategy]);
 
   const cancelReset = useCallback(() => {
     setShowResetConfirm(false);
@@ -355,6 +362,31 @@ function AppContent() {
             {expandedSection === 'assumptions' && (
               <div className="px-4 pb-4">
                 <AssumptionsForm assumptions={assumptions} onChange={setAssumptions} />
+              </div>
+            )}
+          </div>
+
+          {/* Withdrawal Strategy Section */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => toggleSection('withdrawalStrategy')}
+              className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+            >
+              <span className="font-medium text-gray-900 dark:text-white">Withdrawal Strategy</span>
+              <svg
+                className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+                  expandedSection === 'withdrawalStrategy' ? 'rotate-180' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {expandedSection === 'withdrawalStrategy' && (
+              <div className="px-4 pb-4">
+                <WithdrawalStrategyForm strategy={withdrawalStrategy} onChange={setWithdrawalStrategy} />
               </div>
             )}
           </div>
