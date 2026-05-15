@@ -205,6 +205,9 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
                     <th className="text-right py-2 px-2 font-medium text-blue-600 dark:text-blue-400">RMD</th>
+                    {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
+                      <th className="text-right py-2 px-2 font-medium text-emerald-600 dark:text-emerald-400">Roth Conv.</th>
+                    )}
                     {accounts.map(acc => (
                       <th key={acc.id} className={`text-right py-2 px-2 font-medium ${getColorClass(acc.type)}`}>
                         {acc.name}
@@ -220,6 +223,11 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                       <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">
                         {yearData.rmdAmount > 0 ? formatCurrency(yearData.rmdAmount) : '-'}
                       </td>
+                      {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
+                        <td className="py-2 px-2 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                          {yearData.rothConversionAmount > 0 ? formatCurrency(yearData.rothConversionAmount) : '-'}
+                        </td>
+                      )}
                       {accounts.map(acc => (
                         <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
                           {(yearData.withdrawals[acc.id] || 0) > 0 ? formatCurrency(yearData.withdrawals[acc.id] || 0) : '-'}
@@ -231,6 +239,25 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                     </tr>
                   ))}
                 </tbody>
+                {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
+                      <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
+                      <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">-</td>
+                      <td className="py-2 px-2 text-right font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.rothConversionAmount, 0))}
+                      </td>
+                      {accounts.map(acc => (
+                        <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                          {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + (y.withdrawals[acc.id] || 0), 0))}
+                        </td>
+                      ))}
+                      <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
+                        {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.totalWithdrawal, 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             )}
 
@@ -458,6 +485,12 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
               <span className="w-3 h-3 rounded bg-green-500"></span>
               <span className="text-gray-600 dark:text-gray-400">Roth (tax-free)</span>
             </div>
+            {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded bg-emerald-600"></span>
+                <span className="text-gray-600 dark:text-gray-400">Roth Conversion (taxable now, tax-free later)</span>
+              </div>
+            )}
             <div className="flex items-center gap-1">
               <span className="w-3 h-3 rounded bg-amber-500"></span>
               <span className="text-gray-600 dark:text-gray-400">Taxable (capital gains)</span>

@@ -118,6 +118,7 @@ export const CHART_COLORS = {
   otherIncome: '#f97316',      // orange
   taxFreeIncome: '#06b6d4',    // cyan
   retirementIncome: '#0ea5e9', // sky
+  rothConversion: '#059669',   // emerald
 };
 
 // Default values for new app state
@@ -140,6 +141,11 @@ export const DEFAULT_ASSUMPTIONS = {
 export const DEFAULT_WITHDRAWAL_STRATEGY: WithdrawalStrategySettings = {
   fillTaxBracket: true,
   withdrawalOrder: ['roth', 'taxable', 'hsa', 'traditional'],
+  rothConversion: {
+    enabled: false,
+    targetBracketRate: 0.22,
+    maxAnnualConversion: 0,
+  },
 };
 
 export const DEFAULT_INCOME_STREAMS: IncomeStream[] = [

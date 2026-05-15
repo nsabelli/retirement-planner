@@ -15,6 +15,7 @@ import {
   calculateTotalFederalTax,
   calculateStateTax,
   getStandardDeduction,
+  getConversionToTopOfBracket,
 } from './taxes';
 import { getRMDDivisor, RMD_START_AGE } from './constants';
 import type { CountryConfig } from '../countries';
@@ -47,6 +48,14 @@ function calculateRMD(
   const divisor = getRMDDivisor(age);
   if (divisor <= 0) return 0;
   return traditionalBalance / divisor;
+}
+
+/**
+ * Check if we're before the mandatory minimum withdrawal age (RMD / RRIF start).
+ * Uses the country config's minimum withdrawal logic with a dummy balance.
+ */
+function isPreRMDAge(age: number, accountType: string, countryConfig?: CountryConfig): boolean {
+  return calculateRMD(age, 100000, accountType, countryConfig) === 0;
 }
 
 /**
@@ -184,7 +193,54 @@ export function calculateWithdrawals(
       inflatedStreamByTax.fully_taxable +
       inflatedStreamByTax.other_income;
 
+    // Roth conversions (pre-RMD years only)
+    const conversionSettings = withdrawalStrategy?.rothConversion;
+    let rothConversionAmount = 0;
+
+    if (conversionSettings?.enabled) {
+      const traditionalStates = accountStates.filter(
+        acc => isTraditionalAccount(acc.type) && acc.balance > 0
+      );
+      const rothState = accountStates.find(
+        acc => getTaxTreatment(acc.type) === 'roth'
+      );
+
+      if (traditionalStates.length > 0 && rothState) {
+        const firstTraditionalType = traditionalStates[0].type;
+        const preRMD = isPreRMDAge(age, firstTraditionalType, countryConfig);
+
+        if (preRMD) {
+          const filingStatus = profile.filingStatus || 'single';
+          const room = getConversionToTopOfBracket(
+            nonPortfolioTaxableIncome,
+            conversionSettings.targetBracketRate,
+            filingStatus
+          );
+
+          let targetConversion = room;
+          if (conversionSettings.maxAnnualConversion > 0) {
+            targetConversion = Math.min(targetConversion, conversionSettings.maxAnnualConversion);
+          }
+
+          let remaining = targetConversion;
+          for (const acc of traditionalStates) {
+            if (remaining <= 0) break;
+            const convert = Math.min(remaining, acc.balance);
+            acc.balance -= convert;
+            rothState.balance += convert;
+            remaining -= convert;
+            if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+              accountDepletionAges[acc.id] = age;
+            }
+          }
+          rothConversionAmount = targetConversion - remaining;
+        }
+      }
+    }
+
     // Tax-optimized withdrawal strategy
+    // Pass conversion amount as additional committed ordinary income so bracket-fill
+    // logic accounts for income already created by the Roth conversion.
     const withdrawals = performTaxOptimizedWithdrawal(
       accountStates,
       accounts,
@@ -195,7 +251,7 @@ export function calculateWithdrawals(
       accountDepletionAges,
       age,
       countryConfig,
-      nonPortfolioTaxableIncome,
+      nonPortfolioTaxableIncome + rothConversionAmount,
       withdrawalStrategy
     );
 
@@ -219,7 +275,7 @@ export function calculateWithdrawals(
     const otherIncomeTaxable = inflatedStreamByTax.other_income;
     // tax_free: excluded from taxable income
 
-    const ordinaryIncome = withdrawals.traditionalWithdrawal +
+    const ordinaryIncome = withdrawals.traditionalWithdrawal + rothConversionAmount +
       governmentBenefitTaxable + ssStreamTaxable + pensionTaxable + otherIncomeTaxable;
     const capitalGains = withdrawals.taxableGains;
 
@@ -289,6 +345,7 @@ export function calculateWithdrawals(
       afterTaxIncome,
       targetSpending,
       rmdAmount,
+      rothConversionAmount,
       totalRemainingBalance: accountStates.reduce((sum, acc) => sum + acc.balance, 0),
       earlyWithdrawalPenalties: penalties,
       totalPenalties,
