@@ -83,6 +83,13 @@ export interface Assumptions {
   retirementReturnRate: number; // as decimal
 }
 
+export type AccountTypeGroup = 'traditional' | 'roth' | 'taxable' | 'hsa';
+
+export interface WithdrawalStrategySettings {
+  fillTaxBracket: boolean;
+  withdrawalOrder: AccountTypeGroup[];
+}
+
 export interface YearlyAccountBalance {
   age: number;
   year: number;

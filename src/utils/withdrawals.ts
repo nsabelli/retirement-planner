@@ -7,6 +7,8 @@ import {
   YearlyWithdrawal,
   getTaxTreatment,
   isTraditional,
+  WithdrawalStrategySettings,
+  AccountTypeGroup,
 } from '../types';
 import type { IncomeStream } from '../types';
 import {
@@ -81,7 +83,8 @@ export function calculateWithdrawals(
   assumptions: Assumptions,
   accumulationResult: AccumulationResult,
   countryConfig?: CountryConfig,
-  incomeStreams?: IncomeStream[]
+  incomeStreams?: IncomeStream[],
+  withdrawalStrategy?: WithdrawalStrategySettings
 ): RetirementResult {
   const retirementYears = profile.lifeExpectancy - profile.retirementAge;
   const currentYear = new Date().getFullYear();
@@ -184,7 +187,7 @@ export function calculateWithdrawals(
     // Tax-optimized withdrawal strategy
     const withdrawals = performTaxOptimizedWithdrawal(
       accountStates,
-      accounts,  // NEW: pass full accounts array
+      accounts,
       targetSpending,
       rmdAmount,
       totalRetirementIncome,
@@ -192,7 +195,8 @@ export function calculateWithdrawals(
       accountDepletionAges,
       age,
       countryConfig,
-      nonPortfolioTaxableIncome
+      nonPortfolioTaxableIncome,
+      withdrawalStrategy
     );
 
     // Calculate early withdrawal penalties
@@ -319,16 +323,9 @@ interface WithdrawalResult {
   accountWithdrawals: AccountWithdrawal[];  // NEW: for penalty calculation
 }
 
-/**
- * Perform tax-optimized withdrawal strategy:
- * 1. Take required RMDs from traditional accounts
- * 2. Fill low tax brackets with additional traditional withdrawals
- * 3. Use Roth for remaining needs (tax-free)
- * 4. Use taxable if more is needed
- */
 function performTaxOptimizedWithdrawal(
   accountStates: AccountState[],
-  accounts: Account[],  // NEW: need full account objects
+  accounts: Account[],
   targetSpending: number,
   rmdAmount: number,
   totalRetirementIncome: number,
@@ -336,8 +333,12 @@ function performTaxOptimizedWithdrawal(
   accountDepletionAges: Record<string, number | null>,
   age: number,
   countryConfig?: CountryConfig,
-  nonPortfolioTaxableIncome?: number
+  nonPortfolioTaxableIncome?: number,
+  strategy?: WithdrawalStrategySettings
 ): WithdrawalResult {
+  const fillTaxBracket = strategy?.fillTaxBracket ?? true;
+  const withdrawalOrder: AccountTypeGroup[] = strategy?.withdrawalOrder ?? ['roth', 'taxable', 'hsa', 'traditional'];
+
   const result: WithdrawalResult = {
     total: 0,
     traditionalWithdrawal: 0,
@@ -346,14 +347,13 @@ function performTaxOptimizedWithdrawal(
     taxableGains: 0,
     hsaWithdrawal: 0,
     byAccount: {},
-    accountWithdrawals: [],  // NEW
+    accountWithdrawals: [],
   };
 
   accountStates.forEach(acc => {
     result.byAccount[acc.id] = 0;
   });
 
-  // Helper to record withdrawals for penalty calculation
   const recordWithdrawal = (acc: AccountState, amount: number) => {
     const account = accounts.find(a => a.id === acc.id);
     if (account && amount > 0) {
@@ -366,10 +366,8 @@ function performTaxOptimizedWithdrawal(
     }
   };
 
-  // How much do we need after all retirement income (government benefits + income streams)?
   let remainingNeed = Math.max(0, targetSpending - totalRetirementIncome);
 
-  // Filter to only available accounts
   const availableAccounts = getAvailableAccounts(
     accountStates,
     accounts,
@@ -378,216 +376,125 @@ function performTaxOptimizedWithdrawal(
     countryConfig
   );
 
-  // Get account groups from available accounts only
   const isTraditionalAccount = (type: string) =>
     countryConfig ? countryConfig.isTraditionalAccount(type) : isTraditional(type);
-  const traditionalAccounts = availableAccounts.filter(acc => isTraditionalAccount(acc.type));
-  const rothAccounts = availableAccounts.filter(acc =>
-    getTaxTreatment(acc.type) === 'roth'
-  );
-  const taxableAccounts = availableAccounts.filter(acc =>
-    getTaxTreatment(acc.type) === 'taxable'
-  );
-  const hsaAccounts = availableAccounts.filter(acc =>
-    getTaxTreatment(acc.type) === 'hsa'
-  );
 
-  // Step 1: Take RMDs from traditional accounts (required)
+  const traditionalAccounts = availableAccounts.filter(acc => isTraditionalAccount(acc.type));
+
+  // Helper: withdraw from a single account state, updating result totals
+  const withdrawFrom = (acc: AccountState, amount: number) => {
+    if (amount <= 0) return;
+    const treatment = getTaxTreatment(acc.type);
+
+    // Compute taxable gains BEFORE reducing balance
+    if (treatment === 'taxable') {
+      const gainRatio = acc.costBasis > 0 ? Math.max(0, 1 - acc.costBasis / acc.balance) : 0.5;
+      result.taxableGains += amount * gainRatio;
+      result.taxableWithdrawal += amount;
+      acc.balance -= amount;
+      if (acc.balance > 0) {
+        acc.costBasis *= (acc.balance / (acc.balance + amount));
+      } else {
+        acc.costBasis = 0;
+      }
+    } else {
+      acc.balance -= amount;
+      if (isTraditionalAccount(acc.type)) {
+        result.traditionalWithdrawal += amount;
+      } else if (treatment === 'roth') {
+        result.rothWithdrawal += amount;
+      } else if (treatment === 'hsa') {
+        result.hsaWithdrawal += amount;
+      }
+    }
+
+    result.byAccount[acc.id] += amount;
+    result.total += amount;
+    recordWithdrawal(acc, amount);
+    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
+      accountDepletionAges[acc.id] = age;
+    }
+  };
+
+  // Step 1: RMDs from traditional accounts (required by law)
   let rmdRemaining = rmdAmount;
   for (const acc of traditionalAccounts) {
     if (rmdRemaining <= 0) break;
     const withdrawal = Math.min(rmdRemaining, acc.balance);
-    acc.balance -= withdrawal;
-    result.byAccount[acc.id] += withdrawal;
-    result.traditionalWithdrawal += withdrawal;
-    result.total += withdrawal;
+    withdrawFrom(acc, withdrawal);
     rmdRemaining -= withdrawal;
     remainingNeed = Math.max(0, remainingNeed - withdrawal);
-    recordWithdrawal(acc, withdrawal);  // NEW
-
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
-    }
   }
 
-  // Step 2: Fill up to 12% bracket with additional traditional withdrawals
-  // (Standard deduction + 12% bracket gives good tax efficiency)
-  const filingStatus = profile.filingStatus || 'single';
-  const standardDeduction = getStandardDeduction(filingStatus);
-  const bracket12Max = filingStatus === 'married_filing_jointly' ? 94300 : 47150;
-  const targetOrdinaryIncome = standardDeduction + bracket12Max;
-  const currentOrdinaryIncome = result.traditionalWithdrawal +
-    (nonPortfolioTaxableIncome || 0);
-  const roomIn12Bracket = Math.max(0, targetOrdinaryIncome - currentOrdinaryIncome);
+  // Step 2: Fill tax bracket with traditional withdrawals (optional)
+  if (fillTaxBracket) {
+    const filingStatus = profile.filingStatus || 'single';
+    const standardDeduction = getStandardDeduction(filingStatus);
+    const bracket12Max = filingStatus === 'married_filing_jointly' ? 94300 : 47150;
+    const targetOrdinaryIncome = standardDeduction + bracket12Max;
+    const currentOrdinaryIncome = result.traditionalWithdrawal + (nonPortfolioTaxableIncome || 0);
+    const roomIn12Bracket = Math.max(0, targetOrdinaryIncome - currentOrdinaryIncome);
+    let bracketFill = Math.min(roomIn12Bracket, remainingNeed);
 
-  // Withdraw additional from traditional if we have room and need the money
-  const additionalTraditional = Math.min(roomIn12Bracket, remainingNeed);
-  let additionalRemaining = additionalTraditional;
-
-  for (const acc of traditionalAccounts) {
-    if (additionalRemaining <= 0) break;
-    const withdrawal = Math.min(additionalRemaining, acc.balance);
-    acc.balance -= withdrawal;
-    result.byAccount[acc.id] += withdrawal;
-    result.traditionalWithdrawal += withdrawal;
-    result.total += withdrawal;
-    additionalRemaining -= withdrawal;
-    remainingNeed -= withdrawal;
-    recordWithdrawal(acc, withdrawal);  // NEW
-
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
-    }
-  }
-
-  // Step 3: Use Roth accounts for remaining needs (tax-free)
-  for (const acc of rothAccounts) {
-    if (remainingNeed <= 0) break;
-    const withdrawal = Math.min(remainingNeed, acc.balance);
-    acc.balance -= withdrawal;
-    result.byAccount[acc.id] += withdrawal;
-    result.rothWithdrawal += withdrawal;
-    result.total += withdrawal;
-    remainingNeed -= withdrawal;
-    recordWithdrawal(acc, withdrawal);  // NEW
-
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
-    }
-  }
-
-  // Step 4: Use taxable accounts if still need more
-  for (const acc of taxableAccounts) {
-    if (remainingNeed <= 0) break;
-    const withdrawal = Math.min(remainingNeed, acc.balance);
-
-    // Calculate gains portion (simplified: proportional to balance vs cost basis)
-    const gainRatio = acc.costBasis > 0 ? Math.max(0, 1 - acc.costBasis / acc.balance) : 0.5;
-    const gains = withdrawal * gainRatio;
-
-    acc.balance -= withdrawal;
-    // Reduce cost basis proportionally
-    if (acc.balance > 0) {
-      acc.costBasis *= (acc.balance / (acc.balance + withdrawal));
-    } else {
-      acc.costBasis = 0;
-    }
-
-    result.byAccount[acc.id] += withdrawal;
-    result.taxableWithdrawal += withdrawal;
-    result.taxableGains += gains;
-    result.total += withdrawal;
-    remainingNeed -= withdrawal;
-    recordWithdrawal(acc, withdrawal);  // NEW
-
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
-    }
-  }
-
-  // Step 5: Use HSA as last resort (treat as tax-free for medical)
-  for (const acc of hsaAccounts) {
-    if (remainingNeed <= 0) break;
-    const withdrawal = Math.min(remainingNeed, acc.balance);
-    acc.balance -= withdrawal;
-    result.byAccount[acc.id] += withdrawal;
-    result.hsaWithdrawal += withdrawal;
-    result.total += withdrawal;
-    remainingNeed -= withdrawal;
-    recordWithdrawal(acc, withdrawal);  // NEW
-
-    if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-      accountDepletionAges[acc.id] = age;
-    }
-  }
-
-  // Step 6: If still need more money and have traditional accounts with balance,
-  // withdraw beyond the 12% bracket (accepting higher taxes is better than not meeting needs)
-  if (remainingNeed > 0) {
     for (const acc of traditionalAccounts) {
+      if (bracketFill <= 0) break;
+      const withdrawal = Math.min(bracketFill, acc.balance);
+      withdrawFrom(acc, withdrawal);
+      bracketFill -= withdrawal;
+      remainingNeed -= withdrawal;
+    }
+  }
+
+  // Step 3: Draw from accounts in user-configured order
+  const groupAccounts = (group: AccountTypeGroup): AccountState[] => {
+    switch (group) {
+      case 'traditional':
+        return availableAccounts.filter(acc => isTraditionalAccount(acc.type));
+      case 'roth':
+        return availableAccounts.filter(acc => getTaxTreatment(acc.type) === 'roth');
+      case 'taxable':
+        return availableAccounts.filter(acc => getTaxTreatment(acc.type) === 'taxable');
+      case 'hsa':
+        return availableAccounts.filter(acc => getTaxTreatment(acc.type) === 'hsa');
+    }
+  };
+
+  for (const group of withdrawalOrder) {
+    if (remainingNeed <= 0) break;
+    for (const acc of groupAccounts(group)) {
       if (remainingNeed <= 0) break;
       const withdrawal = Math.min(remainingNeed, acc.balance);
-      acc.balance -= withdrawal;
-      result.byAccount[acc.id] += withdrawal;
-      result.traditionalWithdrawal += withdrawal;
-      result.total += withdrawal;
+      withdrawFrom(acc, withdrawal);
       remainingNeed -= withdrawal;
-      recordWithdrawal(acc, withdrawal);  // NEW
-
-      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-        accountDepletionAges[acc.id] = age;
-      }
     }
   }
 
-  // Step 7: Last resort - use unavailable accounts if we still need money
-  // (This triggers early withdrawal penalties)
+  // Step 4: Last resort — use unavailable accounts (triggers early withdrawal penalties)
   if (remainingNeed > 0) {
-    // Get accounts that are NOT yet available
     const unavailableAccounts = accountStates.filter(state => {
       const account = accounts.find(a => a.id === state.id);
       if (!account) return false;
-
       const withdrawalAge = account.withdrawalRules?.startAge ??
         (countryConfig
           ? getDefaultWithdrawalAge(account, profile.retirementAge, countryConfig)
           : profile.retirementAge);
-
       return age < withdrawalAge && state.balance > 0;
     });
 
-    // Use unavailable traditional accounts first (they have penalties)
-    const unavailableTraditional = unavailableAccounts.filter(acc =>
-      isTraditionalAccount(acc.type)
-    );
-    for (const acc of unavailableTraditional) {
+    // Traditional penalty accounts first
+    for (const acc of unavailableAccounts.filter(acc => isTraditionalAccount(acc.type))) {
       if (remainingNeed <= 0) break;
       const withdrawal = Math.min(remainingNeed, acc.balance);
-      acc.balance -= withdrawal;
-      result.byAccount[acc.id] += withdrawal;
-      result.traditionalWithdrawal += withdrawal;
-      result.total += withdrawal;
+      withdrawFrom(acc, withdrawal);
       remainingNeed -= withdrawal;
-      recordWithdrawal(acc, withdrawal);
-
-      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-        accountDepletionAges[acc.id] = age;
-      }
     }
 
-    // Then use other unavailable accounts if still needed
-    const unavailableOthers = unavailableAccounts.filter(acc =>
-      !isTraditionalAccount(acc.type)
-    );
-    for (const acc of unavailableOthers) {
+    // Then other unavailable account types
+    for (const acc of unavailableAccounts.filter(acc => !isTraditionalAccount(acc.type))) {
       if (remainingNeed <= 0) break;
       const withdrawal = Math.min(remainingNeed, acc.balance);
-      acc.balance -= withdrawal;
-      result.byAccount[acc.id] += withdrawal;
-
-      const treatment = getTaxTreatment(acc.type);
-      if (treatment === 'roth') {
-        result.rothWithdrawal += withdrawal;
-      } else if (treatment === 'taxable') {
-        result.taxableWithdrawal += withdrawal;
-        const gainRatio = acc.costBasis > 0 ? Math.max(0, 1 - acc.costBasis / acc.balance) : 0.5;
-        result.taxableGains += withdrawal * gainRatio;
-        if (acc.balance > 0) {
-          acc.costBasis *= (acc.balance / (acc.balance + withdrawal));
-        } else {
-          acc.costBasis = 0;
-        }
-      } else if (treatment === 'hsa') {
-        result.hsaWithdrawal += withdrawal;
-      }
-
-      result.total += withdrawal;
+      withdrawFrom(acc, withdrawal);
       remainingNeed -= withdrawal;
-      recordWithdrawal(acc, withdrawal);
-
-      if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
-        accountDepletionAges[acc.id] = age;
-      }
     }
   }
 

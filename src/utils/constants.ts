@@ -1,4 +1,4 @@
-import { TaxBracket, RMDEntry } from '../types';
+import { TaxBracket, RMDEntry, WithdrawalStrategySettings } from '../types';
 import type { IncomeStream } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -135,6 +135,11 @@ export const DEFAULT_ASSUMPTIONS = {
   inflationRate: 0.03,
   safeWithdrawalRate: 0.04,
   retirementReturnRate: 0.05,
+};
+
+export const DEFAULT_WITHDRAWAL_STRATEGY: WithdrawalStrategySettings = {
+  fillTaxBracket: true,
+  withdrawalOrder: ['roth', 'taxable', 'hsa', 'traditional'],
 };
 
 export const DEFAULT_INCOME_STREAMS: IncomeStream[] = [
