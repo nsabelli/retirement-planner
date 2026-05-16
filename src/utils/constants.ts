@@ -136,6 +136,8 @@ export const DEFAULT_ASSUMPTIONS = {
   inflationRate: 0.03,
   safeWithdrawalRate: 0.04,
   retirementReturnRate: 0.05,
+  withdrawalMode: 'swr' as const,
+  targetMonthlySpending: 5000,
 };
 
 export const DEFAULT_WITHDRAWAL_STRATEGY: WithdrawalStrategySettings = {

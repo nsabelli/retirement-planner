@@ -45,6 +45,13 @@ Model multiple sources of retirement income beyond portfolio withdrawals:
 - **Start & End Ages**: Configure when each stream begins and optionally when it ends
 - **Inflation Adjusted**: Amounts are stored in today's dollars and automatically adjusted for inflation
 
+### Withdrawal Target Mode
+Choose how your retirement spending target is set:
+- **Safe Withdrawal Rate**: Enter a percentage (e.g. 4%) applied to your total portfolio at retirement — the traditional approach
+- **Target Monthly Spending**: Enter a USD after-tax monthly amount in today's dollars; the calculator derives the required gross withdrawals and computes the **effective withdrawal rate** automatically
+
+Both the monthly withdrawal amount and the effective withdrawal rate are always shown on the dashboard, regardless of which mode is active.
+
 ### Retirement Projections
 - **Accumulation Phase**: Project portfolio growth from now until retirement with compound interest and contributions
 - **Withdrawal Phase**: Simulate retirement spending with tax-optimized withdrawal strategies
@@ -190,7 +197,8 @@ src/
 │   ├── NumberInput.tsx           # String to number conversion
 │   ├── ProfileForm.tsx           # Personal information form
 │   ├── SummaryCards.tsx          # Expandable key metrics display
-│   └── Tooltip.tsx               # Reusable tooltip component
+│   ├── Tooltip.tsx               # Reusable tooltip component
+│   └── WithdrawalStrategyForm.tsx # Withdrawal order & Roth conversion settings
 ├── contexts/
 │   └── CountryContext.tsx    # Country selection state management
 ├── countries/                # Country-specific configurations
@@ -236,11 +244,12 @@ For each year until retirement:
 ### Withdrawal Phase
 For each year of retirement:
 1. Calculate Required Minimum Distribution (if age 73+)
-2. Determine target spending (safe withdrawal rate + inflation)
+2. Determine target spending — either `portfolio × safeWithdrawalRate` or `targetMonthlySpending × 12`, inflated each year
 3. Subtract income streams and government benefits from spending need
 4. Withdraw from accounts in tax-optimized order
 5. Apply investment returns to remaining balance
 6. Calculate federal and state taxes
+7. Report effective withdrawal rate (`annualTarget ÷ portfolioAtRetirement`)
 
 ### Key Assumptions
 - Investment returns are applied annually
@@ -258,7 +267,9 @@ For each year of retirement:
 | Retirement Age | 65 |
 | Life Expectancy | 90 |
 | Inflation Rate | 3% |
+| Withdrawal Target Mode | Safe Withdrawal Rate |
 | Safe Withdrawal Rate | 4% |
+| Target Monthly Spending | $5,000/month |
 | Retirement Return Rate | 5% |
 | CPP Benefit (Canada) | $30,000/year |
 | CPP Start Age (Canada) | 67 |

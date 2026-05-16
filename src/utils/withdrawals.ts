@@ -111,9 +111,13 @@ export function calculateWithdrawals(
       : 0,
   }));
 
-  // Calculate initial target spending based on safe withdrawal rate
   const totalPortfolio = accumulationResult.totalAtRetirement;
-  let targetSpending = totalPortfolio * assumptions.safeWithdrawalRate;
+  const mode = assumptions.withdrawalMode ?? 'swr';
+  const initialTargetSpending = mode === 'target_spending' && assumptions.targetMonthlySpending
+    ? assumptions.targetMonthlySpending * 12
+    : totalPortfolio * assumptions.safeWithdrawalRate;
+  let targetSpending = initialTargetSpending;
+  const effectiveWithdrawalRate = totalPortfolio > 0 ? initialTargetSpending / totalPortfolio : 0;
 
   const yearlyWithdrawals: YearlyWithdrawal[] = [];
   let lifetimeTaxesPaid = 0;
@@ -355,8 +359,8 @@ export function calculateWithdrawals(
     targetSpending *= (1 + assumptions.inflationRate);
   }
 
-  // Calculate sustainable withdrawal amounts in today's dollars
-  const sustainableAnnualWithdrawal = totalPortfolio * assumptions.safeWithdrawalRate;
+  // Sustainable withdrawal amounts in today's dollars
+  const sustainableAnnualWithdrawal = initialTargetSpending;
   const sustainableMonthlyWithdrawal = sustainableAnnualWithdrawal / 12;
 
   return {
@@ -365,6 +369,7 @@ export function calculateWithdrawals(
     lifetimeTaxesPaid,
     sustainableMonthlyWithdrawal,
     sustainableAnnualWithdrawal,
+    effectiveWithdrawalRate,
     accountDepletionAges,
   };
 }

@@ -37,6 +37,7 @@ export function useRetirementCalc(
         lifetimeTaxesPaid: 0,
         sustainableMonthlyWithdrawal: 0,
         sustainableAnnualWithdrawal: 0,
+        effectiveWithdrawalRate: 0,
         accountDepletionAges: {},
       };
     }

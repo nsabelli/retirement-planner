@@ -77,10 +77,14 @@ export interface Profile {
   secondaryBenefitAmount?: number; // OAS amount for CA
 }
 
+export type WithdrawalMode = 'swr' | 'target_spending';
+
 export interface Assumptions {
   inflationRate: number; // as decimal
   safeWithdrawalRate: number; // as decimal
   retirementReturnRate: number; // as decimal
+  withdrawalMode?: WithdrawalMode;
+  targetMonthlySpending?: number; // in today's dollars, after-tax target
 }
 
 export type AccountTypeGroup = 'traditional' | 'roth' | 'taxable' | 'hsa';
@@ -139,6 +143,7 @@ export interface RetirementResult {
   lifetimeTaxesPaid: number;
   sustainableMonthlyWithdrawal: number;
   sustainableAnnualWithdrawal: number;
+  effectiveWithdrawalRate: number; // as decimal
   accountDepletionAges: Record<string, number | null>; // accountId -> age when depleted
 }
 

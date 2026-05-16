@@ -130,10 +130,13 @@ export function SummaryCards({
   const {
     sustainableMonthlyWithdrawal,
     sustainableAnnualWithdrawal,
+    effectiveWithdrawalRate,
     portfolioDepletionAge,
     lifetimeTaxesPaid,
     yearlyWithdrawals,
   } = retirementResult;
+
+  const withdrawalMode = assumptions.withdrawalMode ?? 'swr';
 
   // Validate age configuration
   const hasInvalidAges = profile.lifeExpectancy <= profile.retirementAge ||
@@ -253,15 +256,28 @@ export function SummaryCards({
           <ExpandableStatCard
             title="Monthly Withdrawal"
             value={formatCurrency(sustainableMonthlyWithdrawal)}
-            subtitle="In today's dollars"
+            subtitle={withdrawalMode === 'target_spending' ? 'After-tax target, today\'s dollars' : 'In today\'s dollars'}
             color="green"
-            formula={`${formatCurrency(totalAtRetirement)} × ${formatPercent(assumptions.safeWithdrawalRate)} ÷ 12`}
+            formula={withdrawalMode === 'target_spending'
+              ? `Target: ${formatCurrency((assumptions.targetMonthlySpending ?? 0))} / month`
+              : `${formatCurrency(totalAtRetirement)} × ${formatPercent(assumptions.safeWithdrawalRate)} ÷ 12`}
             details={
               <div>
-                <p className="mb-1">
-                  Based on the {formatPercent(assumptions.safeWithdrawalRate)} safe withdrawal rate applied to your
-                  {' '}{formatCurrency(totalAtRetirement)} portfolio.
-                </p>
+                {withdrawalMode === 'target_spending' ? (
+                  <>
+                    <p className="mb-1">
+                      You set a target of {formatCurrency(assumptions.targetMonthlySpending ?? 0)}/month after-tax in today's dollars.
+                    </p>
+                    <p className="mb-1">
+                      Equivalent effective withdrawal rate: {formatPercent(effectiveWithdrawalRate)} of your {formatCurrency(totalAtRetirement)} portfolio.
+                    </p>
+                  </>
+                ) : (
+                  <p className="mb-1">
+                    Based on the {formatPercent(assumptions.safeWithdrawalRate)} safe withdrawal rate applied to your
+                    {' '}{formatCurrency(totalAtRetirement)} portfolio.
+                  </p>
+                )}
                 <p>
                   Actual withdrawals will be adjusted for {formatPercent(assumptions.inflationRate)} annual inflation.
                 </p>
@@ -271,20 +287,63 @@ export function SummaryCards({
           <ExpandableStatCard
             title="Annual Withdrawal"
             value={formatCurrency(sustainableAnnualWithdrawal)}
-            subtitle="In today's dollars"
+            subtitle={withdrawalMode === 'target_spending' ? 'After-tax target, today\'s dollars' : 'In today\'s dollars'}
             color="green"
-            formula={`${formatCurrency(totalAtRetirement)} × ${formatPercent(assumptions.safeWithdrawalRate)}`}
+            formula={withdrawalMode === 'target_spending'
+              ? `${formatCurrency(assumptions.targetMonthlySpending ?? 0)} × 12`
+              : `${formatCurrency(totalAtRetirement)} × ${formatPercent(assumptions.safeWithdrawalRate)}`}
             details={
               <div>
-                <p className="mb-1">
-                  = {formatCurrency(totalAtRetirement)} × {formatPercent(assumptions.safeWithdrawalRate)}
-                </p>
-                <p className="mb-1">
-                  = {formatCurrency(sustainableAnnualWithdrawal)}
-                </p>
+                {withdrawalMode === 'target_spending' ? (
+                  <p className="mb-1">
+                    = {formatCurrency(assumptions.targetMonthlySpending ?? 0)} × 12 = {formatCurrency(sustainableAnnualWithdrawal)}
+                  </p>
+                ) : (
+                  <p className="mb-1">
+                    = {formatCurrency(totalAtRetirement)} × {formatPercent(assumptions.safeWithdrawalRate)} = {formatCurrency(sustainableAnnualWithdrawal)}
+                  </p>
+                )}
                 <p className="text-gray-500 dark:text-gray-400 italic">
                   This is your initial withdrawal amount. Each year it increases by the inflation rate ({formatPercent(assumptions.inflationRate)}).
                 </p>
+              </div>
+            }
+          />
+          <ExpandableStatCard
+            title={withdrawalMode === 'target_spending' ? 'Effective Withdrawal Rate' : 'Safe Withdrawal Rate'}
+            value={formatPercent(withdrawalMode === 'target_spending' ? effectiveWithdrawalRate : assumptions.safeWithdrawalRate)}
+            subtitle={withdrawalMode === 'target_spending' ? 'Derived from spending target' : 'Configured rate'}
+            color="teal"
+            formula={withdrawalMode === 'target_spending'
+              ? `${formatCurrency((assumptions.targetMonthlySpending ?? 0) * 12)} ÷ ${formatCurrency(totalAtRetirement)}`
+              : `Configured as ${formatPercent(assumptions.safeWithdrawalRate)}`}
+            details={
+              <div>
+                {withdrawalMode === 'target_spending' ? (
+                  <>
+                    <p className="mb-1">
+                      Annual target: {formatCurrency((assumptions.targetMonthlySpending ?? 0) * 12)}
+                    </p>
+                    <p className="mb-1">
+                      Portfolio at retirement: {formatCurrency(totalAtRetirement)}
+                    </p>
+                    <p className="mb-1">
+                      Effective rate = {formatPercent(effectiveWithdrawalRate)}
+                    </p>
+                    <p className="text-gray-500 dark:text-gray-400 italic">
+                      The traditional safe withdrawal rate guideline is 4%. Higher rates increase depletion risk.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mb-1">
+                      Implies a monthly withdrawal of {formatCurrency(sustainableMonthlyWithdrawal)} from your {formatCurrency(totalAtRetirement)} portfolio.
+                    </p>
+                    <p className="text-gray-500 dark:text-gray-400 italic">
+                      The traditional guideline of 4% has historically sustained portfolios over 30-year retirements.
+                    </p>
+                  </>
+                )}
               </div>
             }
           />

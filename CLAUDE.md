@@ -39,10 +39,18 @@ This is a React retirement planning calculator that projects portfolio growth an
 
 - `Account`: Investment account with balance, contributions, return rate, type (traditional_401k, roth_ira, etc.)
 - `Profile`: User info including ages, filing status, Social Security
-- `Assumptions`: Economic parameters (inflation, withdrawal rate, retirement return)
-- `AccumulationResult` / `RetirementResult`: Yearly projections with balances, withdrawals, taxes
+- `Assumptions`: Economic parameters (inflation, withdrawal rate, retirement return, withdrawal mode, target monthly spending)
+- `AccumulationResult` / `RetirementResult`: Yearly projections with balances, withdrawals, taxes, effective withdrawal rate
 
 ### Key Features
+
+**Withdrawal Target Mode (`Assumptions.withdrawalMode`):**
+- Two modes: `'swr'` (safe withdrawal rate) and `'target_spending'` (target monthly spending in USD)
+- In `swr` mode: `targetSpending = totalPortfolio × safeWithdrawalRate`
+- In `target_spending` mode: `targetSpending = targetMonthlySpending × 12` (today's dollars, inflation-adjusted each year)
+- `effectiveWithdrawalRate` is always returned in `RetirementResult`: equals the SWR in `swr` mode, or `annualTarget / totalPortfolio` in `target_spending` mode
+- Dashboard shows both the monthly withdrawal amount and effective withdrawal rate regardless of mode
+- Toggle UI in `AssumptionsForm.tsx`; calculation logic in `withdrawals.ts` lines 114–120
 
 **Configurable Withdrawal Ages:**
 - Each account has optional `withdrawalRules: { startAge: number }`
