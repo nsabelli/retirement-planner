@@ -20,6 +20,7 @@ This is a React retirement planning calculator that projects portfolio growth an
 1. **Accumulation Phase** (`src/utils/projections.ts`): Projects account growth from current age to retirement using compound interest, annual contributions, contribution growth rates, and employer matching.
 
 2. **Withdrawal Phase** (`src/utils/withdrawals.ts`): Simulates retirement spending with a tax-optimized withdrawal strategy:
+   - Optionally performs Roth conversions (pre-RMD years only) up to the user-selected bracket top
    - Takes Required Minimum Distributions (RMDs) from traditional accounts first (age 73+)
    - Fills 12% tax bracket with additional traditional withdrawals
    - Uses Roth accounts (tax-free)
@@ -41,8 +42,25 @@ This is a React retirement planning calculator that projects portfolio growth an
 - `Profile`: User info including ages, filing status, Social Security
 - `Assumptions`: Economic parameters (inflation, withdrawal rate, retirement return, withdrawal mode, target monthly spending)
 - `AccumulationResult` / `RetirementResult`: Yearly projections with balances, withdrawals, taxes, effective withdrawal rate
+- `YearlyWithdrawal`: Per-year retirement data including `conversionByAccount` (per-account Roth conversion outflows, separate from spending withdrawals)
 
 ### Key Features
+
+**Roth Conversion Strategy (`WithdrawalStrategySettings.rothConversion`):**
+- Runs each year before RMD age; converts from traditional accounts to Roth up to the top of the user-selected tax bracket
+- Bracket room = `getConversionToTopOfBracket(nonPortfolioTaxableIncome, targetBracketRate, filingStatus)` in `taxes.ts`
+  - Returns gross income room = `(targetBracket.max − currentTaxable) + deductionRoom`
+  - Accounts for existing ordinary income (SS, pensions) before computing room
+- Safety check: conversion only proceeds if `availableNonTraditional + bracketRoom ≥ spendingNeed`; otherwise spending would force traditional withdrawals that exceed the bracket regardless, so conversion is skipped
+- Optional `maxAnnualConversion` cap applied after bracket room is computed
+- Per-account conversion outflows tracked in `conversionByAccount` (stored on `YearlyWithdrawal`)
+- `grossTaxableIncome = ordinaryIncome + capitalGains` (includes conversion; excludes tax-free Roth spending)
+- `afterTaxIncome = grossWithdrawal + SS + pensions − totalTax` (spendable cash; conversion excluded as it is not spendable)
+
+**Year-by-Year Data Table (`DataTableWithdrawal.tsx`) — column definitions:**
+- *Income & Spending*: Withdrawals = spending from portfolio (excl. conversion) | Gross Taxable Income = `ordinaryIncome + capitalGains` | After-Tax Spendable = portfolio spending + SS/pensions − taxes
+- *Withdrawals by Account*: per-account column = spending withdrawal + Roth conversion outflow; Total = both combined
+- *Tax Details*: Gross Taxable Income same as above; Effective Rate = `totalTax ÷ grossTaxableIncome`
 
 **Withdrawal Target Mode (`Assumptions.withdrawalMode`):**
 - Two modes: `'swr'` (safe withdrawal rate) and `'target_spending'` (target monthly spending in USD)

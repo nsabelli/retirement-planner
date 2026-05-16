@@ -119,12 +119,13 @@ export interface AccumulationResult {
 export interface YearlyWithdrawal {
   age: number;
   year: number;
-  withdrawals: Record<string, number>; // accountId -> withdrawal
+  withdrawals: Record<string, number>; // accountId -> spending withdrawal
+  conversionByAccount: Record<string, number>; // accountId -> Roth conversion outflow
   remainingBalances: Record<string, number>; // accountId -> remaining balance
-  totalWithdrawal: number;
+  totalWithdrawal: number; // spending withdrawals only (excludes Roth conversion)
   governmentBenefitIncome: number;  // was socialSecurityIncome — Canada CPP/OAS only
   incomeStreamIncome: number;       // user-defined income streams (SS, pensions, etc.)
-  grossIncome: number;
+  grossIncome: number; // includes Roth conversion amount
   federalTax: number;
   stateTax: number;
   totalTax: number;

@@ -200,6 +200,7 @@ export function calculateWithdrawals(
     // Roth conversions (pre-RMD years only)
     const conversionSettings = withdrawalStrategy?.rothConversion;
     let rothConversionAmount = 0;
+    const conversionByAccount: Record<string, number> = {};
 
     if (conversionSettings?.enabled) {
       const traditionalStates = accountStates.filter(
@@ -215,11 +216,25 @@ export function calculateWithdrawals(
 
         if (preRMD) {
           const filingStatus = profile.filingStatus || 'single';
-          const room = getConversionToTopOfBracket(
+          const bracketRoom = getConversionToTopOfBracket(
             nonPortfolioTaxableIncome,
             conversionSettings.targetBracketRate,
             filingStatus
           );
+
+          // Ensure the conversion doesn't push total ordinary income above the target
+          // bracket. After conversion, spending comes from the grown Roth balance.
+          // If non-traditional assets (including the conversion growing Roth) can cover
+          // the full spending need, traditional withdrawals for spending are $0 and the
+          // bracket limit holds. Otherwise the spending shortfall forces traditional
+          // withdrawals that blow past the bracket regardless, so skip converting.
+          const spendingNeed = Math.max(0, targetSpending - totalRetirementIncome);
+          const availableNonTraditional = accountStates
+            .filter(acc => !isTraditionalAccount(acc.type))
+            .reduce((sum, acc) => sum + acc.balance, 0);
+          const room = (availableNonTraditional + bracketRoom >= spendingNeed)
+            ? bracketRoom
+            : 0;
 
           let targetConversion = room;
           if (conversionSettings.maxAnnualConversion > 0) {
@@ -232,6 +247,7 @@ export function calculateWithdrawals(
             const convert = Math.min(remaining, acc.balance);
             acc.balance -= convert;
             rothState.balance += convert;
+            conversionByAccount[acc.id] = (conversionByAccount[acc.id] || 0) + convert;
             remaining -= convert;
             if (acc.balance <= 0 && accountDepletionAges[acc.id] === null) {
               accountDepletionAges[acc.id] = age;
@@ -325,8 +341,13 @@ export function calculateWithdrawals(
     lifetimeTaxesPaid += totalTax;
 
     const grossWithdrawal = withdrawals.total;
-    const grossIncome = grossWithdrawal + governmentBenefitIncome + inflatedStreamIncome;
-    const afterTaxIncome = grossIncome - totalTax;
+    // grossIncome = taxable income basis (what taxes are computed on):
+    // ordinary income (traditional withdrawals + conversion + taxable SS/pensions) + capital gains.
+    // Excludes tax-free Roth withdrawals so it stays comparable to bracket limits.
+    const grossIncome = ordinaryIncome + capitalGains;
+    // afterTaxIncome = spendable cash: all spending withdrawals (incl. Roth) + SS/pensions - taxes.
+    // Conversion is intentionally excluded — it is a balance transfer, not spendable cash.
+    const afterTaxIncome = grossWithdrawal + governmentBenefitIncome + inflatedStreamIncome - totalTax;
 
     // Record the year's data
     const remainingBalances: Record<string, number> = {};
@@ -338,6 +359,7 @@ export function calculateWithdrawals(
       age,
       year,
       withdrawals: withdrawals.byAccount,
+      conversionByAccount,
       remainingBalances,
       totalWithdrawal: grossWithdrawal,
       governmentBenefitIncome,

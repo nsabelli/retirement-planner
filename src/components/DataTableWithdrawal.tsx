@@ -155,9 +155,9 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Target Spending</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Withdrawals</th>
                     <th className="text-right py-2 px-2 font-medium" style={{ color: CHART_COLORS.retirementIncome }}>Retirement Income</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Taxable Income</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Taxes</th>
-                    <th className="text-right py-2 px-2 font-medium text-teal-600 dark:text-teal-400">After-Tax Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-teal-600 dark:text-teal-400">After-Tax Spendable</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -228,13 +228,18 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                           {yearData.rothConversionAmount > 0 ? formatCurrency(yearData.rothConversionAmount) : '-'}
                         </td>
                       )}
-                      {accounts.map(acc => (
-                        <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                          {(yearData.withdrawals[acc.id] || 0) > 0 ? formatCurrency(yearData.withdrawals[acc.id] || 0) : '-'}
-                        </td>
-                      ))}
+                      {accounts.map(acc => {
+                        const spending = yearData.withdrawals[acc.id] || 0;
+                        const conversion = yearData.conversionByAccount[acc.id] || 0;
+                        const total = spending + conversion;
+                        return (
+                          <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                            {total > 0 ? formatCurrency(total) : '-'}
+                          </td>
+                        );
+                      })}
                       <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(yearData.totalWithdrawal)}
+                        {formatCurrency(yearData.totalWithdrawal + yearData.rothConversionAmount)}
                       </td>
                     </tr>
                   ))}
@@ -249,11 +254,11 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                       </td>
                       {accounts.map(acc => (
                         <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                          {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + (y.withdrawals[acc.id] || 0), 0))}
+                          {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + (y.withdrawals[acc.id] || 0) + (y.conversionByAccount[acc.id] || 0), 0))}
                         </td>
                       ))}
                       <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.totalWithdrawal, 0))}
+                        {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.totalWithdrawal + y.rothConversionAmount, 0))}
                       </td>
                     </tr>
                   </tfoot>
@@ -297,7 +302,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
-                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Taxable Income</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Federal Tax</th>
                     <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Penalties</th>

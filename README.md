@@ -60,13 +60,14 @@ Both the monthly withdrawal amount and the effective withdrawal rate are always 
 
 ### Tax-Optimized Withdrawals
 The withdrawal algorithm follows a tax-efficient strategy:
-1. **Required Minimum Distributions (RMDs)**: Mandatory withdrawals from traditional accounts starting at age 73
-2. **Account Availability**: Respects configured withdrawal start ages (e.g., delaying IRA withdrawals until age 60)
-3. **Early Withdrawal Penalties**: Calculates 10% penalty for US traditional account withdrawals before age 59.5
-4. **Tax Bracket Optimization**: Fill lower tax brackets with traditional withdrawals
-5. **Roth Withdrawals**: Tax-free withdrawals for remaining needs
-6. **Taxable Account Withdrawals**: With capital gains tracking
-7. **HSA**: Used last, tax-free for qualified medical expenses
+1. **Roth Conversions (pre-RMD)**: Each year before RMD age, convert from traditional accounts to Roth up to the top of a user-selected tax bracket — filling the 10%, 12%, 22%, 24%, or 32% bracket. The conversion amount is limited to keep total ordinary income (existing SS/pension income + conversion) within the selected bracket. Conversion is skipped if spending needs would force additional traditional withdrawals that exceed the bracket regardless.
+2. **Required Minimum Distributions (RMDs)**: Mandatory withdrawals from traditional accounts starting at age 73
+3. **Account Availability**: Respects configured withdrawal start ages (e.g., delaying IRA withdrawals until age 60)
+4. **Early Withdrawal Penalties**: Calculates 10% penalty for US traditional account withdrawals before age 59.5
+5. **Tax Bracket Optimization**: Fill lower tax brackets with traditional withdrawals
+6. **Roth Withdrawals**: Tax-free withdrawals for remaining needs
+7. **Taxable Account Withdrawals**: With capital gains tracking
+8. **HSA**: Used last, tax-free for qualified medical expenses
 
 ### Tax Calculations
 
@@ -243,13 +244,18 @@ For each year until retirement:
 
 ### Withdrawal Phase
 For each year of retirement:
-1. Calculate Required Minimum Distribution (if age 73+)
-2. Determine target spending — either `portfolio × safeWithdrawalRate` or `targetMonthlySpending × 12`, inflated each year
-3. Subtract income streams and government benefits from spending need
-4. Withdraw from accounts in tax-optimized order
-5. Apply investment returns to remaining balance
-6. Calculate federal and state taxes
-7. Report effective withdrawal rate (`annualTarget ÷ portfolioAtRetirement`)
+1. Determine target spending — either `portfolio × safeWithdrawalRate` or `targetMonthlySpending × 12`, inflated each year
+2. If pre-RMD age and Roth conversion enabled: compute bracket room from existing income, check spending coverage, convert up to the bracket top
+3. Calculate Required Minimum Distribution (if age 73+)
+4. Subtract income streams and government benefits from spending need
+5. Withdraw from accounts in tax-optimized order
+6. Apply investment returns to remaining balances
+7. Calculate federal and state taxes on `ordinaryIncome + capitalGains` (includes conversion amount)
+8. Report effective withdrawal rate (`annualTarget ÷ portfolioAtRetirement`)
+
+**Income definitions used in year-by-year data:**
+- *Gross Taxable Income* = ordinary income (traditional withdrawals + Roth conversion + taxable SS/pensions) + capital gains — this is the income that determines your tax bracket and effective rate
+- *After-Tax Spendable* = all portfolio spending withdrawals (incl. tax-free Roth) + SS/pensions − total taxes — actual cash available to spend each year
 
 ### Key Assumptions
 - Investment returns are applied annually
