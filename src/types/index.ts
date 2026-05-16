@@ -85,9 +85,16 @@ export interface Assumptions {
 
 export type AccountTypeGroup = 'traditional' | 'roth' | 'taxable' | 'hsa';
 
+export interface RothConversionSettings {
+  enabled: boolean;
+  targetBracketRate: number; // e.g., 0.22 for 22% bracket
+  maxAnnualConversion: number; // 0 = no cap
+}
+
 export interface WithdrawalStrategySettings {
   fillTaxBracket: boolean;
   withdrawalOrder: AccountTypeGroup[];
+  rothConversion?: RothConversionSettings;
 }
 
 export interface YearlyAccountBalance {
@@ -120,6 +127,7 @@ export interface YearlyWithdrawal {
   afterTaxIncome: number;
   targetSpending: number;
   rmdAmount: number;
+  rothConversionAmount: number;
   totalRemainingBalance: number;
   earlyWithdrawalPenalties: EarlyWithdrawalPenalty[];
   totalPenalties: number;

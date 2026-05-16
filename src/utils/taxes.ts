@@ -180,6 +180,35 @@ export function getWithdrawalToFillBracket(
 }
 
 /**
+ * Calculate how much can be converted from traditional to Roth
+ * to fill all brackets UP TO AND INCLUDING the target bracket.
+ * Used for Roth conversion planning before RMD age.
+ */
+export function getConversionToTopOfBracket(
+  currentOrdinaryIncome: number,
+  targetBracketRate: number,
+  filingStatus: FilingStatus
+): number {
+  const standardDeduction = getStandardDeduction(filingStatus);
+  const brackets = getTaxBrackets(filingStatus);
+
+  const targetBracket = brackets.find(b => b.rate === targetBracketRate);
+  if (!targetBracket) return 0;
+
+  const currentTaxable = Math.max(0, currentOrdinaryIncome - standardDeduction);
+
+  if (currentTaxable >= targetBracket.max) return 0;
+
+  const deductionRoom = currentOrdinaryIncome < standardDeduction
+    ? standardDeduction - currentOrdinaryIncome
+    : 0;
+
+  // Room from current taxable income all the way to top of target bracket
+  const taxableRoom = targetBracket.max - currentTaxable;
+  return taxableRoom + deductionRoom;
+}
+
+/**
  * Effective tax rate
  */
 export function getEffectiveTaxRate(
