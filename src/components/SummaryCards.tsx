@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { AccumulationResult, RetirementResult, Profile, Assumptions } from '../types';
+import { Account, AccumulationResult, RetirementResult, Profile, Assumptions, getTaxTreatment } from '../types';
 import { STANDARD_DEDUCTION_MFJ, STANDARD_DEDUCTION_SINGLE } from '../utils/constants';
 import { useCountry } from '../contexts/CountryContext';
 
 interface SummaryCardsProps {
+  accounts: Account[];
   profile: Profile;
   assumptions: Assumptions;
   accumulationResult: AccumulationResult;
@@ -119,6 +120,7 @@ function ExpandableStatCard({
 }
 
 export function SummaryCards({
+  accounts,
   profile,
   assumptions,
   accumulationResult,
@@ -178,6 +180,28 @@ export function SummaryCards({
   const avgAnnualPenalty = yearlyWithdrawals.length > 0
     ? lifetimePenalties / yearlyWithdrawals.length
     : 0;
+
+  // Estate planning: portfolio at longevity
+  const lastYear = yearlyWithdrawals[yearlyWithdrawals.length - 1];
+  const totalAtLongevity = lastYear?.totalRemainingBalance ?? 0;
+
+  // Build a lookup from accountId -> tax treatment
+  const accountTreatmentById = Object.fromEntries(
+    accounts.map(a => [a.id, getTaxTreatment(a.type)])
+  );
+
+  const taxFreeAtLongevity = lastYear
+    ? Object.entries(lastYear.remainingBalances)
+        .filter(([id]) => accountTreatmentById[id] === 'roth')
+        .reduce((sum, [, bal]) => sum + bal, 0)
+    : 0;
+
+  const taxFreePercent = totalAtLongevity > 0
+    ? (taxFreeAtLongevity / totalAtLongevity) * 100
+    : 0;
+
+  // Label Roth-equivalent accounts by country
+  const rothLabel = country === 'CA' ? 'TFSA' : 'Roth';
 
   return (
     <div className="space-y-6">
@@ -476,6 +500,63 @@ export function SummaryCards({
               }
             />
           ) : null}
+        </div>
+      </div>
+
+      {/* Estate Planning */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+          Estate Planning (Age {profile.lifeExpectancy})
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <ExpandableStatCard
+            title="Total Portfolio"
+            value={formatCurrency(totalAtLongevity)}
+            subtitle={`Projected balance at age ${profile.lifeExpectancy}`}
+            color="blue"
+            formula="Final year remaining balance after all withdrawals"
+            details={
+              <div>
+                <p className="mb-1">
+                  Simulation ends at age {profile.lifeExpectancy} ({retirementYears} years of retirement).
+                </p>
+                {totalAtLongevity === 0 ? (
+                  <p className="text-red-600 dark:text-red-400">
+                    Portfolio is depleted before longevity.
+                  </p>
+                ) : (
+                  <p>
+                    This balance represents your estimated estate value in nominal (future) dollars.
+                    In today's dollars: {formatCurrency(totalAtLongevity / Math.pow(1 + assumptions.inflationRate, retirementYears))}.
+                  </p>
+                )}
+              </div>
+            }
+          />
+          <ExpandableStatCard
+            title={`Tax-Free Balance (${rothLabel})`}
+            value={formatCurrency(taxFreeAtLongevity)}
+            subtitle={`${taxFreePercent.toFixed(0)}% of portfolio`}
+            color="green"
+            formula={`Sum of ${rothLabel} account balances at age ${profile.lifeExpectancy}`}
+            details={
+              <div>
+                <p className="mb-1">
+                  {rothLabel} accounts pass to heirs without income tax obligation on distributions.
+                </p>
+                {taxFreeAtLongevity === 0 && totalAtLongevity > 0 && (
+                  <p className="text-amber-600 dark:text-amber-400">
+                    No {rothLabel} balance remaining — consider Roth conversions to grow this amount.
+                  </p>
+                )}
+                {taxFreeAtLongevity > 0 && (
+                  <p>
+                    Taxable portion of estate: {formatCurrency(totalAtLongevity - taxFreeAtLongevity)} ({(100 - taxFreePercent).toFixed(0)}%)
+                  </p>
+                )}
+              </div>
+            }
+          />
         </div>
       </div>
 

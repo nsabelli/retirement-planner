@@ -440,6 +440,7 @@ function AppContent() {
               {activeTab === 'summary' && (
                 <div className="space-y-6">
                   <SummaryCards
+                    accounts={accounts}
                     profile={profile}
                     assumptions={assumptions}
                     accumulationResult={accumulation}

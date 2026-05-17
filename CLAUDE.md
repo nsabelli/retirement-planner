@@ -63,6 +63,12 @@ This is a React retirement planning calculator that projects portfolio growth an
 - `grossIncome = ordinaryIncome + capitalGains` (includes conversion; excludes tax-free Roth spending). `taxableIncome = max(0, grossIncome − standardDeduction)` where the standard deduction is inflation-projected (US); for Canada `taxableIncome = grossIncome` (basic personal amount is a credit, not a deduction). Both stored on `YearlyWithdrawal`.
 - `afterTaxIncome = grossWithdrawal + SS + pensions − totalTax` (spendable cash; conversion excluded as it is not spendable)
 
+**Estate Planning Section (`SummaryCards.tsx`):**
+- New "Estate Planning (Age {lifeExpectancy})" summary section with two expandable cards:
+  - *Total Portfolio*: `lastYear.totalRemainingBalance` — nominal balance at the simulation's final year; expanded view shows inflation-adjusted (today's dollars) equivalent
+  - *Tax-Free Balance (Roth / TFSA)*: sum of `remainingBalances` for accounts whose `getTaxTreatment()` returns `'roth'`; shows percentage of total estate; expanded view notes taxable portion and prompts Roth conversion consideration if $0
+- `SummaryCards` now accepts an `accounts: Account[]` prop (passed from `App.tsx`) to resolve per-account tax treatment at longevity
+
 **Year-by-Year Data Table (`DataTableWithdrawal.tsx`) — column definitions:**
 - *Income & Spending*: Withdrawals = spending from portfolio (excl. conversion) | Gross Income = `ordinaryIncome + capitalGains` | Taxable Income = `Gross Income − standardDeduction` (inflation-projected) | After-Tax Spendable = portfolio spending + SS/pensions − taxes
 - *Withdrawals by Account*: per-account column = spending withdrawal + Roth conversion outflow; Total = both combined
