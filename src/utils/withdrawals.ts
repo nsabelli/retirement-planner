@@ -84,6 +84,112 @@ function getAvailableAccounts(
 }
 
 /**
+ * Compute federal + state income tax for a year's income (penalties excluded).
+ * Extracted so the after-tax gross-up solver and the committed run share logic.
+ */
+function computeIncomeTaxes(
+  ordinaryIncome: number,
+  capitalGains: number,
+  profile: Profile,
+  countryConfig?: CountryConfig
+): { federalTax: number; stateTax: number } {
+  let federalTax: number;
+  let stateTax: number;
+
+  if (countryConfig) {
+    federalTax = countryConfig.calculateFederalTax(ordinaryIncome, profile.filingStatus);
+    federalTax += countryConfig.calculateCapitalGainsTax(
+      capitalGains,
+      ordinaryIncome,
+      profile.region || '',
+      profile.filingStatus
+    );
+    stateTax = countryConfig.calculateRegionalTax(
+      ordinaryIncome + capitalGains,
+      profile.region || ''
+    );
+    if (countryConfig.code === 'US') {
+      stateTax = calculateStateTax(
+        ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
+        profile.stateTaxRate || 0
+      );
+    }
+  } else {
+    federalTax = calculateTotalFederalTax(
+      ordinaryIncome,
+      capitalGains,
+      profile.filingStatus || 'single'
+    );
+    stateTax = calculateStateTax(
+      ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
+      profile.stateTaxRate || 0
+    );
+  }
+
+  return { federalTax, stateTax };
+}
+
+/**
+ * Solve the gross spend target whose after-tax spendable cash equals
+ * `afterTaxTarget`. Iterative because a larger withdrawal raises taxes, which
+ * raises the need. Runs trial withdrawals on a clone so it never mutates state.
+ * Used both for the committed run and to size the Roth-conversion spending need.
+ */
+function solveAfterTaxSpendTarget(
+  snapshot: AccountState[],
+  accounts: Account[],
+  afterTaxTarget: number,
+  rmdAmount: number,
+  totalRetirementIncome: number,
+  profile: Profile,
+  age: number,
+  countryConfig: CountryConfig | undefined,
+  fixedOrdinaryIncome: number,
+  governmentBenefitIncome: number,
+  inflatedStreamIncome: number,
+  bracketCommittedOrdinaryIncome: number,
+  strategy?: WithdrawalStrategySettings
+): number {
+  let solved = afterTaxTarget;
+  let prevGross = -1;
+  for (let iter = 0; iter < 20; iter++) {
+    const trialStates = snapshot.map(s => ({ ...s }));
+    const trial = performTaxOptimizedWithdrawal(
+      trialStates,
+      accounts,
+      solved,
+      rmdAmount,
+      totalRetirementIncome,
+      profile,
+      {},
+      age,
+      countryConfig,
+      bracketCommittedOrdinaryIncome,
+      strategy
+    );
+    const trialPenalties = countryConfig
+      ? calculatePenalties(trial.accountWithdrawals, age, countryConfig)
+      : [];
+    const trialPenaltyTotal = trialPenalties.reduce((sum, p) => sum + p.amount, 0);
+    const { federalTax: tFed, stateTax: tState } = computeIncomeTaxes(
+      trial.traditionalWithdrawal + fixedOrdinaryIncome,
+      trial.taxableGains,
+      profile,
+      countryConfig
+    );
+    const trialAfterTax = trial.total + governmentBenefitIncome +
+      inflatedStreamIncome - (tFed + tState + trialPenaltyTotal);
+    const shortfall = afterTaxTarget - trialAfterTax;
+    if (Math.abs(shortfall) < 1) break;
+    // Portfolio exhausted — withdrawing more is impossible, stop grossing up.
+    if (trial.total <= prevGross + 0.01) break;
+    prevGross = trial.total;
+    solved += shortfall;
+  }
+  return solved;
+}
+
+/**
  * Simulate retirement withdrawals with tax-optimized strategy
  */
 export function calculateWithdrawals(
@@ -228,7 +334,27 @@ export function calculateWithdrawals(
           // the full spending need, traditional withdrawals for spending are $0 and the
           // bracket limit holds. Otherwise the spending shortfall forces traditional
           // withdrawals that blow past the bracket regardless, so skip converting.
-          const spendingNeed = Math.max(0, targetSpending - totalRetirementIncome);
+          // In target_spending mode the gross withdrawal is grossed up for taxes, so
+          // size the spending need against that real (higher) gross, not the after-tax
+          // target — otherwise the guard underestimates the need and converts unsafely.
+          const grossSpendTarget = mode === 'target_spending'
+            ? solveAfterTaxSpendTarget(
+                accountStates.map(s => ({ ...s })),
+                accounts,
+                targetSpending,
+                rmdAmount,
+                totalRetirementIncome,
+                profile,
+                age,
+                countryConfig,
+                nonPortfolioTaxableIncome,
+                governmentBenefitIncome,
+                inflatedStreamIncome,
+                nonPortfolioTaxableIncome,
+                withdrawalStrategy
+              )
+            : targetSpending;
+          const spendingNeed = Math.max(0, grossSpendTarget - totalRetirementIncome);
           const availableNonTraditional = accountStates
             .filter(acc => !isTraditionalAccount(acc.type))
             .reduce((sum, acc) => sum + acc.balance, 0);
@@ -258,13 +384,46 @@ export function calculateWithdrawals(
       }
     }
 
-    // Tax-optimized withdrawal strategy
+    // Taxable portions of fixed (non-portfolio) income. Constant across the
+    // gross-up solve since they don't depend on the withdrawal amount.
+    // Government benefits (Canada CPP/OAS): 85% taxable
+    const governmentBenefitTaxable = governmentBenefitIncome * 0.85;
+    // Income streams: per-bucket tax rules
+    const ssStreamTaxable = inflatedStreamByTax.social_security * 0.85;
+    const pensionTaxable = inflatedStreamByTax.fully_taxable;
+    const otherIncomeTaxable = inflatedStreamByTax.other_income;
+    // tax_free: excluded from taxable income
+    const fixedOrdinaryIncome = rothConversionAmount +
+      governmentBenefitTaxable + ssStreamTaxable + pensionTaxable + otherIncomeTaxable;
+
+    // In target_spending mode the target is an *after-tax* spending goal. Gross up
+    // the withdrawal so spendable cash (withdrawals + SS/pensions − taxes) meets the
+    // target. SWR mode keeps classic semantics (withdraw exactly portfolio × rate).
+    const solvedSpendTarget = mode === 'target_spending'
+      ? solveAfterTaxSpendTarget(
+          accountStates.map(s => ({ ...s })),
+          accounts,
+          targetSpending,
+          rmdAmount,
+          totalRetirementIncome,
+          profile,
+          age,
+          countryConfig,
+          fixedOrdinaryIncome,
+          governmentBenefitIncome,
+          inflatedStreamIncome,
+          nonPortfolioTaxableIncome + rothConversionAmount,
+          withdrawalStrategy
+        )
+      : targetSpending;
+
+    // Tax-optimized withdrawal strategy (committed run against real account states).
     // Pass conversion amount as additional committed ordinary income so bracket-fill
     // logic accounts for income already created by the Roth conversion.
     const withdrawals = performTaxOptimizedWithdrawal(
       accountStates,
       accounts,
-      targetSpending,
+      solvedSpendTarget,
       rmdAmount,
       totalRetirementIncome,
       profile,
@@ -286,57 +445,14 @@ export function calculateWithdrawals(
       acc.balance *= (1 + assumptions.retirementReturnRate);
     });
 
-    // Calculate taxes using country-specific logic
-    // Government benefits (Canada CPP/OAS): 85% taxable
-    const governmentBenefitTaxable = governmentBenefitIncome * 0.85;
-    // Income streams: per-bucket tax rules
-    const ssStreamTaxable = inflatedStreamByTax.social_security * 0.85;
-    const pensionTaxable = inflatedStreamByTax.fully_taxable;
-    const otherIncomeTaxable = inflatedStreamByTax.other_income;
-    // tax_free: excluded from taxable income
-
-    const ordinaryIncome = withdrawals.traditionalWithdrawal + rothConversionAmount +
-      governmentBenefitTaxable + ssStreamTaxable + pensionTaxable + otherIncomeTaxable;
+    const ordinaryIncome = withdrawals.traditionalWithdrawal + fixedOrdinaryIncome;
     const capitalGains = withdrawals.taxableGains;
-
-    let federalTax: number;
-    let stateTax: number;
-
-    if (countryConfig) {
-      // Use country-specific tax calculations
-      federalTax = countryConfig.calculateFederalTax(ordinaryIncome, profile.filingStatus);
-      // Add capital gains tax (country handles inclusion rates)
-      federalTax += countryConfig.calculateCapitalGainsTax(
-        capitalGains,
-        ordinaryIncome,
-        profile.region || '',
-        profile.filingStatus
-      );
-      // Calculate regional (state/provincial) tax
-      stateTax = countryConfig.calculateRegionalTax(
-        ordinaryIncome + capitalGains,
-        profile.region || ''
-      );
-      // For US, regional tax is still calculated using flat rate from profile
-      // (the US config returns 0 from calculateRegionalTax)
-      if (countryConfig.code === 'US') {
-        stateTax = calculateStateTax(
-          ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
-          profile.stateTaxRate || 0
-        );
-      }
-    } else {
-      // Fallback to US logic
-      federalTax = calculateTotalFederalTax(
-        ordinaryIncome,
-        capitalGains,
-        profile.filingStatus || 'single'
-      );
-      stateTax = calculateStateTax(
-        ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
-        profile.stateTaxRate || 0
-      );
-    }
+    const { federalTax, stateTax } = computeIncomeTaxes(
+      ordinaryIncome,
+      capitalGains,
+      profile,
+      countryConfig
+    );
     const totalTax = federalTax + stateTax + totalPenalties;
     lifetimeTaxesPaid += totalTax;
 

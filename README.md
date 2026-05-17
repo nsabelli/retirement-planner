@@ -47,8 +47,8 @@ Model multiple sources of retirement income beyond portfolio withdrawals:
 
 ### Withdrawal Target Mode
 Choose how your retirement spending target is set:
-- **Safe Withdrawal Rate**: Enter a percentage (e.g. 4%) applied to your total portfolio at retirement — the traditional approach
-- **Target Monthly Spending**: Enter a USD after-tax monthly amount in today's dollars; the calculator derives the required gross withdrawals and computes the **effective withdrawal rate** automatically
+- **Safe Withdrawal Rate**: Enter a percentage (e.g. 4%) applied to your total portfolio at retirement — the traditional approach. This is a *gross* withdrawal; the cash you actually keep is lower by the tax you owe that year.
+- **Target Monthly Spending**: Enter a USD **after-tax** monthly amount in today's dollars. The calculator grosses up the withdrawal so that your spendable cash (withdrawals + Social Security/pensions − taxes) actually equals your target. Because a larger withdrawal raises taxes — which raises the amount you need to withdraw — this is solved iteratively until it converges. The **effective withdrawal rate** is computed and shown automatically.
 
 Both the monthly withdrawal amount and the effective withdrawal rate are always shown on the dashboard, regardless of which mode is active.
 
@@ -60,7 +60,7 @@ Both the monthly withdrawal amount and the effective withdrawal rate are always 
 
 ### Tax-Optimized Withdrawals
 The withdrawal algorithm follows a tax-efficient strategy:
-1. **Roth Conversions (pre-RMD)**: Each year before RMD age, convert from traditional accounts to Roth up to the top of a user-selected tax bracket — filling the 10%, 12%, 22%, 24%, or 32% bracket. The conversion amount is limited to keep total ordinary income (existing SS/pension income + conversion) within the selected bracket. Conversion is skipped if spending needs would force additional traditional withdrawals that exceed the bracket regardless.
+1. **Roth Conversions (pre-RMD)**: Each year before RMD age, convert from traditional accounts to Roth up to the top of a user-selected tax bracket — filling the 10%, 12%, 22%, 24%, or 32% bracket. The conversion amount is limited to keep total ordinary income (existing SS/pension income + conversion) within the selected bracket. Conversion is skipped if spending needs would force additional traditional withdrawals that exceed the bracket regardless. In Target Monthly Spending mode this check uses the grossed-up (tax-inclusive) spending need, so the safety guard accounts for the higher real withdrawal.
 2. **Required Minimum Distributions (RMDs)**: Mandatory withdrawals from traditional accounts starting at age 73
 3. **Account Availability**: Respects configured withdrawal start ages (e.g., delaying IRA withdrawals until age 60)
 4. **Early Withdrawal Penalties**: Calculates 10% penalty for US traditional account withdrawals before age 59.5
@@ -244,14 +244,15 @@ For each year until retirement:
 
 ### Withdrawal Phase
 For each year of retirement:
-1. Determine target spending — either `portfolio × safeWithdrawalRate` or `targetMonthlySpending × 12`, inflated each year
-2. If pre-RMD age and Roth conversion enabled: compute bracket room from existing income, check spending coverage, convert up to the bracket top
+1. Determine target spending — either `portfolio × safeWithdrawalRate` (gross) or `targetMonthlySpending × 12` (after-tax), inflated each year
+2. If pre-RMD age and Roth conversion enabled: compute bracket room from existing income, check spending coverage (using the grossed-up need in Target Monthly Spending mode), convert up to the bracket top
 3. Calculate Required Minimum Distribution (if age 73+)
 4. Subtract income streams and government benefits from spending need
-5. Withdraw from accounts in tax-optimized order
-6. Apply investment returns to remaining balances
-7. Calculate federal and state taxes on `ordinaryIncome + capitalGains` (includes conversion amount)
-8. Report effective withdrawal rate (`annualTarget ÷ portfolioAtRetirement`)
+5. In Target Monthly Spending mode, iteratively gross up the withdrawal so after-tax spendable cash meets the target (a larger withdrawal raises taxes, raising the need); SWR mode withdraws exactly `portfolio × rate`
+6. Withdraw from accounts in tax-optimized order
+7. Apply investment returns to remaining balances
+8. Calculate federal and state taxes on `ordinaryIncome + capitalGains` (includes conversion amount)
+9. Report effective withdrawal rate (`annualTarget ÷ portfolioAtRetirement`)
 
 **Income definitions used in year-by-year data:**
 - *Gross Taxable Income* = ordinary income (traditional withdrawals + Roth conversion + taxable SS/pensions) + capital gains — this is the income that determines your tax bracket and effective rate

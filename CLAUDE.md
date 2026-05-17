@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation Updates (MANDATORY)
+
+On **every** change to behavior, calculations, features, types, or project structure, you MUST update both `README.md` and this `CLAUDE.md` in the same change so the docs never drift from the code. This is not optional — treat doc updates as part of the definition of done for any code change.
+
 ## Commands
 
 ```bash
@@ -21,6 +25,7 @@ This is a React retirement planning calculator that projects portfolio growth an
 
 2. **Withdrawal Phase** (`src/utils/withdrawals.ts`): Simulates retirement spending with a tax-optimized withdrawal strategy:
    - Optionally performs Roth conversions (pre-RMD years only) up to the user-selected bracket top
+   - In `target_spending` mode, grosses up the withdrawal so after-tax spendable cash meets the target (see Withdrawal Target Mode)
    - Takes Required Minimum Distributions (RMDs) from traditional accounts first (age 73+)
    - Fills 12% tax bracket with additional traditional withdrawals
    - Uses Roth accounts (tax-free)
@@ -52,6 +57,7 @@ This is a React retirement planning calculator that projects portfolio growth an
   - Returns gross income room = `(targetBracket.max − currentTaxable) + deductionRoom`
   - Accounts for existing ordinary income (SS, pensions) before computing room
 - Safety check: conversion only proceeds if `availableNonTraditional + bracketRoom ≥ spendingNeed`; otherwise spending would force traditional withdrawals that exceed the bracket regardless, so conversion is skipped
+  - In `target_spending` mode, `spendingNeed` is sized against the **grossed-up** withdrawal (via `solveAfterTaxSpendTarget` on a pre-conversion snapshot), not the raw after-tax target, so the guard doesn't under-size the need and convert unsafely
 - Optional `maxAnnualConversion` cap applied after bracket room is computed
 - Per-account conversion outflows tracked in `conversionByAccount` (stored on `YearlyWithdrawal`)
 - `grossTaxableIncome = ordinaryIncome + capitalGains` (includes conversion; excludes tax-free Roth spending)
@@ -64,11 +70,12 @@ This is a React retirement planning calculator that projects portfolio growth an
 
 **Withdrawal Target Mode (`Assumptions.withdrawalMode`):**
 - Two modes: `'swr'` (safe withdrawal rate) and `'target_spending'` (target monthly spending in USD)
-- In `swr` mode: `targetSpending = totalPortfolio × safeWithdrawalRate`
-- In `target_spending` mode: `targetSpending = targetMonthlySpending × 12` (today's dollars, inflation-adjusted each year)
+- In `swr` mode: `targetSpending = totalPortfolio × safeWithdrawalRate`. This is a **gross** withdrawal — classic SWR semantics; after-tax spendable will be below the target by the tax owed
+- In `target_spending` mode: `targetSpending = targetMonthlySpending × 12` (today's dollars, inflation-adjusted each year). This is an **after-tax** spending goal — the withdrawal is grossed up so `withdrawals + SS/pensions − totalTax ≈ targetSpending`
+- Gross-up is solved iteratively by `solveAfterTaxSpendTarget` (a larger withdrawal raises taxes, which raises the need). It runs trial withdrawals on cloned account states (never mutates real state), stops at `< $1` shortfall, max 20 iterations, and bails early when the portfolio is exhausted (withdrawal can't grow). Federal/state tax is shared via the extracted `computeIncomeTaxes` helper
 - `effectiveWithdrawalRate` is always returned in `RetirementResult`: equals the SWR in `swr` mode, or `annualTarget / totalPortfolio` in `target_spending` mode
 - Dashboard shows both the monthly withdrawal amount and effective withdrawal rate regardless of mode
-- Toggle UI in `AssumptionsForm.tsx`; calculation logic in `withdrawals.ts` lines 114–120
+- Toggle UI in `AssumptionsForm.tsx`; mode/target logic in `calculateWithdrawals` and the `solveAfterTaxSpendTarget` / `computeIncomeTaxes` helpers in `withdrawals.ts`
 
 **Configurable Withdrawal Ages:**
 - Each account has optional `withdrawalRules: { startAge: number }`
