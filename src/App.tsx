@@ -99,7 +99,7 @@ function normalizeAccount(
   };
 }
 
-type TabType = 'accumulation' | 'retirement' | 'summary' | 'methodology';
+type TabType = 'accumulation' | 'retirement' | 'summary' | 'yearByYear' | 'methodology';
 
 // Inner app component that uses the country context
 function AppContent() {
@@ -213,6 +213,7 @@ function AppContent() {
     { id: 'summary', label: 'Summary' },
     { id: 'accumulation', label: 'Accumulation Phase' },
     { id: 'retirement', label: 'Retirement Phase' },
+    { id: 'yearByYear', label: 'Year-by-Year Data' },
     { id: 'methodology', label: 'Methodology' },
   ];
 
@@ -464,8 +465,6 @@ function AppContent() {
                     <ChartAccumulation accounts={accounts} result={accumulation} isDarkMode={isDarkMode} />
                   </div>
 
-                  <DataTableAccumulation accounts={accounts} result={accumulation} />
-
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                       Portfolio Composition at Retirement
@@ -499,6 +498,24 @@ function AppContent() {
                     <ChartTax result={retirement} isDarkMode={isDarkMode} />
                   </div>
 
+                </div>
+              )}
+
+              {/* Year-by-Year Data Tab */}
+              {activeTab === 'yearByYear' && (
+                <div className="space-y-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Accumulation Phase (Age {profile.currentAge} to {profile.retirementAge})
+                    </h3>
+                  </div>
+                  <DataTableAccumulation accounts={accounts} result={accumulation} />
+
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Retirement Phase (Age {profile.retirementAge} to {profile.lifeExpectancy})
+                    </h3>
+                  </div>
                   <DataTableWithdrawal accounts={accounts} result={retirement} incomeStreams={incomeStreams} />
                 </div>
               )}

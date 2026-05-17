@@ -15,7 +15,7 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="w-full min-w-[1024px] px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -142,13 +142,13 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="w-full min-w-[1024px] px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
 
       {/* Footer */}
       <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+        <div className="w-full min-w-[1024px] px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <p className="text-sm text-gray-500 dark:text-gray-400 flex-1 text-center">
             This tool provides estimates only. Consult a financial advisor for personalized advice.
             Tax calculations use 2024 federal brackets.

@@ -150,6 +150,7 @@ export function DataTableAccumulation({ accounts, result }: DataTableAccumulatio
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     {accounts.map(acc => (
                       <th key={acc.id} className={`text-right py-2 px-2 font-medium ${getColorClass(acc.type)}`}>
                         {acc.name}
@@ -162,6 +163,7 @@ export function DataTableAccumulation({ accounts, result }: DataTableAccumulatio
                   {result.yearlyBalances.map((yearData) => (
                     <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                      <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                       {accounts.map(acc => (
                         <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
                           {formatCurrency(yearData.balances[acc.id] || 0)}
@@ -181,6 +183,7 @@ export function DataTableAccumulation({ accounts, result }: DataTableAccumulatio
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     {accounts.map(acc => (
                       <th key={acc.id} className={`text-right py-2 px-2 font-medium ${getColorClass(acc.type)}`}>
                         {acc.name}
@@ -196,6 +199,7 @@ export function DataTableAccumulation({ accounts, result }: DataTableAccumulatio
                     return (
                       <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                         <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                        <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                         {accounts.map(acc => {
                           const contrib = yearData.contributions[acc.id] || 0;
                           const match = getEmployerMatch(acc, contrib);
@@ -221,6 +225,7 @@ export function DataTableAccumulation({ accounts, result }: DataTableAccumulatio
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
                     <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
+                    <td className="py-2 px-2 text-gray-600 dark:text-gray-400">-</td>
                     {accounts.map(acc => {
                       const lifetimeContrib = result.yearlyBalances.reduce((sum, year) => {
                         const contrib = year.contributions[acc.id] || 0;

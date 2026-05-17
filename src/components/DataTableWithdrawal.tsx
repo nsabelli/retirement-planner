@@ -21,11 +21,11 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-type ViewMode = 'income' | 'withdrawals' | 'balances' | 'taxes' | 'incomeStreams';
+type ViewMode = 'combined' | 'income' | 'withdrawals' | 'balances' | 'taxes' | 'incomeStreams';
 
 export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: DataTableWithdrawalProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('income');
+  const [viewMode, setViewMode] = useState<ViewMode>('combined');
   const [expandedPenaltyRows, setExpandedPenaltyRows] = useState<Set<number>>(new Set());
 
   const togglePenaltyRow = (age: number) => {
@@ -41,6 +41,9 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
   };
 
   if (!result.yearlyWithdrawals.length) return null;
+
+  const hasRothConversion = result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0);
+  const hasGovBenefits = result.yearlyWithdrawals.some(y => y.governmentBenefitIncome > 0);
 
   // Get color class based on account tax treatment
   const getColorClass = (accountType: Account['type']): string => {
@@ -62,6 +65,20 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
       case 'tax_free': return CHART_COLORS.taxFreeIncome;
     }
   };
+
+  const tabs: { id: ViewMode; label: string }[] = [
+    { id: 'combined', label: 'All Columns' },
+    { id: 'income', label: 'Income & Spending' },
+    { id: 'withdrawals', label: 'Withdrawals by Account' },
+    { id: 'balances', label: 'Remaining Balances' },
+    { id: 'taxes', label: 'Tax Details' },
+    { id: 'incomeStreams', label: 'Income Streams' },
+  ];
+
+  const sum = (fn: (y: RetirementResult['yearlyWithdrawals'][number]) => number) =>
+    result.yearlyWithdrawals.reduce((acc, y) => acc + fn(y), 0);
+
+  const totalGrossIncome = sum(y => y.grossIncome);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -94,64 +111,102 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
         <div className="px-4 pb-4">
           {/* View Mode Tabs */}
           <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-            <button
-              onClick={() => setViewMode('income')}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-                viewMode === 'income'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Income & Spending
-            </button>
-            <button
-              onClick={() => setViewMode('withdrawals')}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-                viewMode === 'withdrawals'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Withdrawals by Account
-            </button>
-            <button
-              onClick={() => setViewMode('balances')}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-                viewMode === 'balances'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Remaining Balances
-            </button>
-            <button
-              onClick={() => setViewMode('taxes')}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-                viewMode === 'taxes'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Tax Details
-            </button>
-            <button
-              onClick={() => setViewMode('incomeStreams')}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-                viewMode === 'incomeStreams'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Income Streams
-            </button>
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setViewMode(tab.id)}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
+                  viewMode === tab.id
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           <div className="overflow-x-auto">
+            {viewMode === 'combined' && (
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Target Spending</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-900 dark:text-white">Withdrawals</th>
+                    <th className="text-right py-2 px-2 font-medium text-blue-600 dark:text-blue-400">RMD</th>
+                    {hasRothConversion && (
+                      <th className="text-right py-2 px-2 font-medium text-emerald-600 dark:text-emerald-400">Roth Conv.</th>
+                    )}
+                    <th className="text-right py-2 px-2 font-medium" style={{ color: CHART_COLORS.retirementIncome }}>Retirement Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Taxable Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Federal Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-500">Penalties</th>
+                    <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Eff. Rate</th>
+                    <th className="text-right py-2 px-2 font-medium text-teal-600 dark:text-teal-400">After-Tax Spendable</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Remaining Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.yearlyWithdrawals.map((yearData) => {
+                    const effectiveRate = yearData.grossIncome > 0 ? yearData.totalTax / yearData.grossIncome : 0;
+                    const retirementIncome = yearData.governmentBenefitIncome + yearData.incomeStreamIncome;
+                    return (
+                      <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                        <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatCurrency(yearData.targetSpending)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.totalWithdrawal)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">{yearData.rmdAmount > 0 ? formatCurrency(yearData.rmdAmount) : '-'}</td>
+                        {hasRothConversion && (
+                          <td className="py-2 px-2 text-right font-mono text-emerald-600 dark:text-emerald-400">{yearData.rothConversionAmount > 0 ? formatCurrency(yearData.rothConversionAmount) : '-'}</td>
+                        )}
+                        <td className="py-2 px-2 text-right font-mono" style={{ color: CHART_COLORS.retirementIncome }}>{retirementIncome > 0 ? formatCurrency(retirementIncome) : '-'}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.grossIncome)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.federalTax)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-orange-600 dark:text-orange-400">{formatCurrency(yearData.stateTax)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-500">{yearData.totalPenalties > 0 ? formatCurrency(yearData.totalPenalties) : '-'}</td>
+                        <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.totalTax)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(effectiveRate)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-teal-600 dark:text-teal-400">{formatCurrency(yearData.afterTaxIncome)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatCurrency(yearData.totalRemainingBalance)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
+                    <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
+                    <td className="py-2 px-2 text-gray-600 dark:text-gray-400">-</td>
+                    <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">-</td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">{formatCurrency(sum(y => y.totalWithdrawal))}</td>
+                    <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">-</td>
+                    {hasRothConversion && (
+                      <td className="py-2 px-2 text-right font-mono font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(sum(y => y.rothConversionAmount))}</td>
+                    )}
+                    <td className="py-2 px-2 text-right font-mono font-medium" style={{ color: CHART_COLORS.retirementIncome }}>{formatCurrency(sum(y => y.governmentBenefitIncome + y.incomeStreamIncome))}</td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">{formatCurrency(totalGrossIncome)}</td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">{formatCurrency(sum(y => y.federalTax))}</td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-orange-600 dark:text-orange-400">{formatCurrency(sum(y => y.stateTax))}</td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-500">{formatCurrency(sum(y => y.totalPenalties))}</td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">{formatCurrency(result.lifetimeTaxesPaid)}</td>
+                    <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(totalGrossIncome > 0 ? result.lifetimeTaxesPaid / totalGrossIncome : 0)}</td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-teal-600 dark:text-teal-400">{formatCurrency(sum(y => y.afterTaxIncome))}</td>
+                    <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">-</td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+
             {viewMode === 'income' && (
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Target Spending</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Withdrawals</th>
                     <th className="text-right py-2 px-2 font-medium" style={{ color: CHART_COLORS.retirementIncome }}>Retirement Income</th>
@@ -164,6 +219,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                   {result.yearlyWithdrawals.map((yearData) => (
                     <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                      <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                       <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatCurrency(yearData.targetSpending)}</td>
                       <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.totalWithdrawal)}</td>
                       <td className="py-2 px-2 text-right font-mono" style={{ color: CHART_COLORS.retirementIncome }}>
@@ -178,21 +234,22 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
                     <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
+                    <td className="py-2 px-2 text-gray-600 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.totalWithdrawal, 0))}
+                      {formatCurrency(sum(y => y.totalWithdrawal))}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium" style={{ color: CHART_COLORS.retirementIncome }}>
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.governmentBenefitIncome + y.incomeStreamIncome, 0))}
+                      {formatCurrency(sum(y => y.governmentBenefitIncome + y.incomeStreamIncome))}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.grossIncome, 0))}
+                      {formatCurrency(totalGrossIncome)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
                       {formatCurrency(result.lifetimeTaxesPaid)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-teal-600 dark:text-teal-400">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.afterTaxIncome, 0))}
+                      {formatCurrency(sum(y => y.afterTaxIncome))}
                     </td>
                   </tr>
                 </tfoot>
@@ -204,8 +261,9 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     <th className="text-right py-2 px-2 font-medium text-blue-600 dark:text-blue-400">RMD</th>
-                    {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
+                    {hasRothConversion && (
                       <th className="text-right py-2 px-2 font-medium text-emerald-600 dark:text-emerald-400">Roth Conv.</th>
                     )}
                     {accounts.map(acc => (
@@ -220,10 +278,11 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                   {result.yearlyWithdrawals.map((yearData) => (
                     <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                      <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                       <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">
                         {yearData.rmdAmount > 0 ? formatCurrency(yearData.rmdAmount) : '-'}
                       </td>
-                      {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
+                      {hasRothConversion && (
                         <td className="py-2 px-2 text-right font-mono text-emerald-600 dark:text-emerald-400">
                           {yearData.rothConversionAmount > 0 ? formatCurrency(yearData.rothConversionAmount) : '-'}
                         </td>
@@ -244,25 +303,26 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                     </tr>
                   ))}
                 </tbody>
-                {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
-                      <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
-                      <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">-</td>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
+                    <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
+                    <td className="py-2 px-2 text-gray-600 dark:text-gray-400">-</td>
+                    <td className="py-2 px-2 text-right font-mono text-blue-600 dark:text-blue-400">-</td>
+                    {hasRothConversion && (
                       <td className="py-2 px-2 text-right font-mono font-medium text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.rothConversionAmount, 0))}
+                        {formatCurrency(sum(y => y.rothConversionAmount))}
                       </td>
-                      {accounts.map(acc => (
-                        <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                          {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + (y.withdrawals[acc.id] || 0) + (y.conversionByAccount[acc.id] || 0), 0))}
-                        </td>
-                      ))}
-                      <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.totalWithdrawal + y.rothConversionAmount, 0))}
+                    )}
+                    {accounts.map(acc => (
+                      <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                        {formatCurrency(sum(y => (y.withdrawals[acc.id] || 0) + (y.conversionByAccount[acc.id] || 0)))}
                       </td>
-                    </tr>
-                  </tfoot>
-                )}
+                    ))}
+                    <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
+                      {formatCurrency(sum(y => y.totalWithdrawal + y.rothConversionAmount))}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             )}
 
@@ -271,6 +331,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     {accounts.map(acc => (
                       <th key={acc.id} className={`text-right py-2 px-2 font-medium ${getColorClass(acc.type)}`}>
                         {acc.name}
@@ -283,6 +344,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                   {result.yearlyWithdrawals.map((yearData) => (
                     <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                      <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                       {accounts.map(acc => (
                         <td key={acc.id} className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
                           {formatCurrency(yearData.remainingBalances[acc.id] || 0)}
@@ -302,6 +364,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Taxable Income</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Federal Tax</th>
                     <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
@@ -319,6 +382,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                       <>
                         <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                           <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                          <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                           <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.grossIncome)}</td>
                           <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.federalTax)}</td>
                           <td className="py-2 px-2 text-right font-mono text-orange-600 dark:text-orange-400">{formatCurrency(yearData.stateTax)}</td>
@@ -344,7 +408,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                         </tr>
                         {hasPenalties && isPenaltyExpanded && yearData.earlyWithdrawalPenalties.length > 0 && (
                           <tr key={`${yearData.age}-penalties`} className="border-b border-gray-100 dark:border-gray-800 bg-red-50 dark:bg-red-900/10">
-                            <td colSpan={7} className="py-2 px-2">
+                            <td colSpan={8} className="py-2 px-2">
                               <div className="pl-4 border-l-2 border-red-300 dark:border-red-700">
                                 <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Early Withdrawal Penalty Details:</p>
                                 {yearData.earlyWithdrawalPenalties.map((penalty, idx) => (
@@ -366,26 +430,24 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
                     <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
+                    <td className="py-2 px-2 text-gray-600 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.grossIncome, 0))}
+                      {formatCurrency(totalGrossIncome)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.federalTax, 0))}
+                      {formatCurrency(sum(y => y.federalTax))}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-orange-600 dark:text-orange-400">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.stateTax, 0))}
+                      {formatCurrency(sum(y => y.stateTax))}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-500">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.totalPenalties, 0))}
+                      {formatCurrency(sum(y => y.totalPenalties))}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
                       {formatCurrency(result.lifetimeTaxesPaid)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                      {formatPercent(
-                        result.lifetimeTaxesPaid /
-                        result.yearlyWithdrawals.reduce((sum, y) => sum + y.grossIncome, 0)
-                      )}
+                      {formatPercent(totalGrossIncome > 0 ? result.lifetimeTaxesPaid / totalGrossIncome : 0)}
                     </td>
                   </tr>
                 </tfoot>
@@ -397,12 +459,13 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     {incomeStreams.map(stream => (
                       <th key={stream.id} className="text-right py-2 px-2 font-medium" style={{ color: getStreamColor(stream.taxTreatment) }}>
                         {stream.name}
                       </th>
                     ))}
-                    {result.yearlyWithdrawals.some(y => y.governmentBenefitIncome > 0) && (
+                    {hasGovBenefits && (
                       <th className="text-right py-2 px-2 font-medium" style={{ color: CHART_COLORS.socialSecurity }}>
                         Gov. Benefits
                       </th>
@@ -413,11 +476,12 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <tbody>
                   {result.yearlyWithdrawals.map((yearData) => {
                     const activeStreams = incomeStreams.filter(s => yearData.age >= s.startAge && (!s.endAge || yearData.age <= s.endAge));
-                    const totalMonthly = activeStreams.reduce((sum, s) => sum + s.monthlyAmount, 0);
+                    const totalMonthly = activeStreams.reduce((s, st) => s + st.monthlyAmount, 0);
 
                     return (
                       <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                         <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                        <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                         {incomeStreams.map(stream => {
                           if (yearData.age < stream.startAge || (stream.endAge && yearData.age > stream.endAge) || totalMonthly === 0) {
                             return <td key={stream.id} className="py-2 px-2 text-right font-mono text-gray-400 dark:text-gray-600">-</td>;
@@ -430,7 +494,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                             </td>
                           );
                         })}
-                        {result.yearlyWithdrawals.some(y => y.governmentBenefitIncome > 0) && (
+                        {hasGovBenefits && (
                           <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
                             {yearData.governmentBenefitIncome > 0 ? formatCurrency(yearData.governmentBenefitIncome) : '-'}
                           </td>
@@ -447,12 +511,13 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
                     <td className="py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900">Lifetime Total</td>
+                    <td className="py-2 px-2 text-gray-600 dark:text-gray-400">-</td>
                     {incomeStreams.map(stream => {
-                      const total = result.yearlyWithdrawals.reduce((sum, yearData) => {
+                      const total = result.yearlyWithdrawals.reduce((acc, yearData) => {
                         const activeStreams = incomeStreams.filter(s => yearData.age >= s.startAge && (!s.endAge || yearData.age <= s.endAge));
                         const totalMonthly = activeStreams.reduce((s, st) => s + st.monthlyAmount, 0);
-                        if (yearData.age < stream.startAge || (stream.endAge && yearData.age > stream.endAge) || totalMonthly === 0) return sum;
-                        return sum + yearData.incomeStreamIncome * (stream.monthlyAmount / totalMonthly);
+                        if (yearData.age < stream.startAge || (stream.endAge && yearData.age > stream.endAge) || totalMonthly === 0) return acc;
+                        return acc + yearData.incomeStreamIncome * (stream.monthlyAmount / totalMonthly);
                       }, 0);
                       return (
                         <td key={stream.id} className="py-2 px-2 text-right font-mono font-medium" style={{ color: getStreamColor(stream.taxTreatment) }}>
@@ -460,13 +525,13 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                         </td>
                       );
                     })}
-                    {result.yearlyWithdrawals.some(y => y.governmentBenefitIncome > 0) && (
+                    {hasGovBenefits && (
                       <td className="py-2 px-2 text-right font-mono font-medium text-gray-600 dark:text-gray-400">
-                        {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.governmentBenefitIncome, 0))}
+                        {formatCurrency(sum(y => y.governmentBenefitIncome))}
                       </td>
                     )}
                     <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
-                      {formatCurrency(result.yearlyWithdrawals.reduce((sum, y) => sum + y.governmentBenefitIncome + y.incomeStreamIncome, 0))}
+                      {formatCurrency(sum(y => y.governmentBenefitIncome + y.incomeStreamIncome))}
                     </td>
                   </tr>
                 </tfoot>
@@ -490,7 +555,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
               <span className="w-3 h-3 rounded bg-green-500"></span>
               <span className="text-gray-600 dark:text-gray-400">Roth (tax-free)</span>
             </div>
-            {result.yearlyWithdrawals.some(y => y.rothConversionAmount > 0) && (
+            {hasRothConversion && (
               <div className="flex items-center gap-1">
                 <span className="w-3 h-3 rounded bg-emerald-600"></span>
                 <span className="text-gray-600 dark:text-gray-400">Roth Conversion (taxable now, tax-free later)</span>
