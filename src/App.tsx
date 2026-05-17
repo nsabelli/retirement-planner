@@ -22,6 +22,7 @@ import { WithdrawalStrategyForm } from './components/WithdrawalStrategyForm';
 import { DataTableAccumulation } from './components/DataTableAccumulation';
 import { DataTableWithdrawal } from './components/DataTableWithdrawal';
 import { ScenarioSelector } from './components/ScenarioSelector';
+import { ScenarioExportImport } from './components/ScenarioExportImport';
 
 /**
  * Ensure every account has withdrawal rules (backwards compat for legacy data).
@@ -58,6 +59,7 @@ function AppContent() {
     createScenario,
     renameScenario,
     deleteScenario,
+    importScenarios,
   } = useScenarios();
 
   // Keep CountryContext in sync when the active scenario's country changes
@@ -161,15 +163,21 @@ function AppContent() {
       onToggleDarkMode={toggleDarkMode}
       onReset={handleReset}
       scenarioSelector={
-        <ScenarioSelector
-          scenarios={scenarios}
-          activeId={activeId}
-          onLoad={handleLoadScenario}
-          onCreateFromDefaults={handleCreateFromDefaults}
-          onCreateFromCurrent={handleCreateFromCurrent}
-          onRename={renameScenario}
-          onDelete={deleteScenario}
-        />
+        <>
+          <ScenarioSelector
+            scenarios={scenarios}
+            activeId={activeId}
+            onLoad={handleLoadScenario}
+            onCreateFromDefaults={handleCreateFromDefaults}
+            onCreateFromCurrent={handleCreateFromCurrent}
+            onRename={renameScenario}
+            onDelete={deleteScenario}
+          />
+          <ScenarioExportImport
+            scenarios={scenarios}
+            onImport={importScenarios}
+          />
+        </>
       }
     >
       {/* Reset Confirmation Modal */}
