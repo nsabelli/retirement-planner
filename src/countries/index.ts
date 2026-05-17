@@ -1,4 +1,4 @@
-import type { Profile } from '../types';
+import type { Profile, TaxBracket } from '../types';
 
 export type CountryCode = 'US' | 'CA';
 
@@ -75,9 +75,11 @@ export interface CountryConfig {
    * Calculate federal/national tax on income
    * @param income - Total taxable income for the year
    * @param filingStatus - Optional filing status (US only: 'single', 'married_filing_jointly')
+   * @param bracketInflation - Optional factor (default 1) scaling bracket thresholds
+   *        and the standard deduction to project them forward from the base tax year
    * @returns Total federal tax owed
    */
-  calculateFederalTax: (income: number, filingStatus?: string) => number;
+  calculateFederalTax: (income: number, filingStatus?: string, bracketInflation?: number) => number;
 
   /**
    * Calculate regional (state/provincial) tax on income
@@ -99,8 +101,20 @@ export interface CountryConfig {
     gains: number,
     ordinaryIncome: number,
     regionCode: string,
-    filingStatus?: string
+    filingStatus?: string,
+    bracketInflation?: number
   ) => number;
+
+  /**
+   * Return the marginal ordinary-income tax bracket the given gross ordinary
+   * income falls into, with thresholds projected by `bracketInflation`.
+   * Optional — only countries with discrete federal brackets implement it.
+   */
+  getMarginalBracket?: (
+    ordinaryIncome: number,
+    filingStatus?: string,
+    bracketInflation?: number
+  ) => TaxBracket;
 
   /**
    * Get list of regions (states/provinces) for this country

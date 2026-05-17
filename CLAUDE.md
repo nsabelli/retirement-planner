@@ -33,7 +33,7 @@ This is a React retirement planning calculator that projects portfolio growth an
    - Uses HSA last
    - Falls back to additional traditional withdrawals if needed
 
-3. **Tax Calculations** (`src/utils/taxes.ts`): Computes federal income tax, capital gains tax, and state tax using 2024 brackets.
+3. **Tax Calculations** (`src/utils/taxes.ts`, `src/countries/usa/taxes.ts`): Computes federal income tax, capital gains tax, and state tax. US brackets/standard deduction/capital-gains thresholds are **2026 IRS values** (Rev. Proc. 2025-32) and are **inflation-projected** per year (see Inflation-Indexed Tax Brackets below).
 
 ### Data Flow
 
@@ -47,13 +47,13 @@ This is a React retirement planning calculator that projects portfolio growth an
 - `Profile`: User info including ages, filing status, Social Security
 - `Assumptions`: Economic parameters (inflation, withdrawal rate, retirement return, withdrawal mode, target monthly spending)
 - `AccumulationResult` / `RetirementResult`: Yearly projections with balances, withdrawals, taxes, effective withdrawal rate
-- `YearlyWithdrawal`: Per-year retirement data including `conversionByAccount` (per-account Roth conversion outflows, separate from spending withdrawals)
+- `YearlyWithdrawal`: Per-year retirement data including `conversionByAccount` (per-account Roth conversion outflows, separate from spending withdrawals) and `taxBracket` (the year's marginal ordinary-income `TaxBracket` with inflation-projected nominal `min`/`max`)
 
 ### Key Features
 
 **Roth Conversion Strategy (`WithdrawalStrategySettings.rothConversion`):**
 - Runs each year before RMD age; converts from traditional accounts to Roth up to the top of the user-selected tax bracket
-- Bracket room = `getConversionToTopOfBracket(nonPortfolioTaxableIncome, targetBracketRate, filingStatus)` in `taxes.ts`
+- Bracket room = `getConversionToTopOfBracket(nonPortfolioTaxableIncome, targetBracketRate, filingStatus, bracketInflation)` in `taxes.ts` (bracket top is inflation-projected)
   - Returns gross income room = `(targetBracket.max − currentTaxable) + deductionRoom`
   - Accounts for existing ordinary income (SS, pensions) before computing room
 - Safety check: conversion only proceeds if `availableNonTraditional + bracketRoom ≥ spendingNeed`; otherwise spending would force traditional withdrawals that exceed the bracket regardless, so conversion is skipped
@@ -66,7 +66,15 @@ This is a React retirement planning calculator that projects portfolio growth an
 **Year-by-Year Data Table (`DataTableWithdrawal.tsx`) — column definitions:**
 - *Income & Spending*: Withdrawals = spending from portfolio (excl. conversion) | Gross Taxable Income = `ordinaryIncome + capitalGains` | After-Tax Spendable = portfolio spending + SS/pensions − taxes
 - *Withdrawals by Account*: per-account column = spending withdrawal + Roth conversion outflow; Total = both combined
-- *Tax Details*: Gross Taxable Income same as above; Effective Rate = `totalTax ÷ grossTaxableIncome`
+- *Tax Details*: Gross Taxable Income same as above; **Tax Bracket** (after Total Tax) = the year's marginal ordinary-income bracket rate with its inflation-projected nominal `min`/`max` range (from `yearData.taxBracket`); Effective Rate = `totalTax ÷ grossTaxableIncome`
+- The Tax Bracket column also appears in the *All Columns* view, immediately after Total Tax. Lifetime-total footer shows `-` for it.
+
+**Inflation-Indexed Tax Brackets:**
+- US federal brackets, standard deduction, and capital-gains thresholds in `src/utils/constants.ts` and `src/countries/usa/constants.ts` are **2026 IRS values** (Rev. Proc. 2025-32). Keep both files in sync.
+- `TAX_BASE_YEAR = 2026` in `withdrawals.ts`. Per projection year, `bracketInflation = (1 + inflationRate) ^ max(0, year − 2026)` scales bracket `min`/`max` and the standard deduction, mirroring the IRS's annual inflation indexing so brackets keep pace with inflated (nominal) income.
+- `bracketInflation` is threaded through `computeIncomeTaxes`, `solveAfterTaxSpendTarget`, `performTaxOptimizedWithdrawal` (12%-fill uses 2026 tops 100800 MFJ / 50400 single × inflation), and `getConversionToTopOfBracket`. The US tax fns (`countries/usa/taxes.ts`, `utils/taxes.ts`) take an optional trailing `bracketInflation = 1` and scale via a local `scaleBrackets` helper.
+- `CountryConfig.calculateFederalTax` / `calculateCapitalGainsTax` gained an optional trailing `bracketInflation?` arg; new optional `getMarginalBracket(ordinaryIncome, filingStatus, bracketInflation)` returns the year's marginal `TaxBracket`. Canada ignores `bracketInflation` (its brackets stay 2024 static — a known simplification).
+- The per-year marginal bracket stored on `YearlyWithdrawal.taxBracket` comes from `countryConfig.getMarginalBracket` (US) or the `getMarginalBracket` fallback in `utils/taxes.ts`.
 
 **Withdrawal Target Mode (`Assumptions.withdrawalMode`):**
 - Two modes: `'swr'` (safe withdrawal rate) and `'target_spending'` (target monthly spending in USD)

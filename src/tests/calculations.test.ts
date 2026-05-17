@@ -63,51 +63,50 @@ function testTaxCalculations(): void {
 
   console.log('\n--- Federal Income Tax (Married Filing Jointly) ---');
 
-  // Standard deduction is $29,200 for MFJ in 2024
-  // So taxable income = gross - 29200
+  // 2026 brackets (IRS Rev. Proc. 2025-32). These tests pass raw taxable
+  // income (no standard deduction) at bracketInflation = 1 (base year 2026).
 
-  // Test 1: Income fully covered by standard deduction
+  // Test 1: Zero taxable income
   const tax1 = calculateFederalIncomeTax(0, 'married_filing_jointly');
   assertApprox(tax1, 0, 0.01, 'Zero taxable income = $0 tax');
 
   // Test 2: Income in 10% bracket only
-  // 10% bracket: $0 - $23,200
+  // 2026 MFJ 10% bracket: $0 - $24,800
   // Tax on $20,000 = $20,000 * 0.10 = $2,000
   const tax2 = calculateFederalIncomeTax(20000, 'married_filing_jointly');
   assertApprox(tax2, 2000, 0.01, '$20k taxable income = $2,000 tax (10% bracket)');
 
-  // Test 3: Income spanning 10% and 12% brackets
-  // 10% on first $23,200 = $2,320
-  // 12% on next $26,800 = $3,216
-  // Total = $5,536
+  // Test 3: Income spanning 10% and 12% brackets (2026 MFJ)
+  // 10% on first $24,800 = $2,480
+  // 12% on next $25,200 ($50,000 - $24,800) = $3,024
+  // Total = $5,504
   const tax3 = calculateFederalIncomeTax(50000, 'married_filing_jointly');
-  assertApprox(tax3, 5536, 0.01, '$50k taxable income = $5,536 tax (10% + 12% brackets)');
+  assertApprox(tax3, 5504, 0.01, '$50k taxable income = $5,504 tax (10% + 12% brackets)');
 
-  // Test 4: Income in 22% bracket
-  // 10% on $23,200 = $2,320
-  // 12% on $71,100 ($94,300 - $23,200) = $8,532
-  // 22% on $5,700 ($100,000 - $94,300) = $1,254
-  // Total = $12,106
+  // Test 4: Income within 12% bracket (2026 MFJ, top of 12% = $100,800)
+  // 10% on $24,800 = $2,480
+  // 12% on $75,200 ($100,000 - $24,800) = $9,024
+  // Total = $11,504
   const tax4 = calculateFederalIncomeTax(100000, 'married_filing_jointly');
-  assertApprox(tax4, 12106, 0.01, '$100k taxable income = $12,106 tax');
+  assertApprox(tax4, 11504, 0.01, '$100k taxable income = $11,504 tax');
 
   console.log('\n--- Federal Income Tax (Single) ---');
 
-  // Single 10% bracket: $0 - $11,600
-  // Single 12% bracket: $11,600 - $47,150
+  // 2026 Single 10% bracket: $0 - $12,400
+  // 2026 Single 12% bracket: $12,400 - $50,400
   const tax5 = calculateFederalIncomeTax(30000, 'single');
-  // 10% on $11,600 = $1,160
-  // 12% on $18,400 = $2,208
-  // Total = $3,368
-  assertApprox(tax5, 3368, 0.01, '$30k taxable income (single) = $3,368 tax');
+  // 10% on $12,400 = $1,240
+  // 12% on $17,600 ($30,000 - $12,400) = $2,112
+  // Total = $3,352
+  assertApprox(tax5, 3352, 0.01, '$30k taxable income (single) = $3,352 tax');
 
   console.log('\n--- Standard Deduction ---');
 
   const stdMFJ = getStandardDeduction('married_filing_jointly');
-  assertApprox(stdMFJ, 29200, 0.01, 'MFJ standard deduction = $29,200');
+  assertApprox(stdMFJ, 32200, 0.01, 'MFJ standard deduction = $32,200 (2026)');
 
   const stdSingle = getStandardDeduction('single');
-  assertApprox(stdSingle, 14600, 0.01, 'Single standard deduction = $14,600');
+  assertApprox(stdSingle, 16100, 0.01, 'Single standard deduction = $16,100 (2026)');
 
   console.log('\n--- State Tax ---');
 
@@ -119,16 +118,15 @@ function testTaxCalculations(): void {
 
   console.log('\n--- Capital Gains Tax (MFJ) ---');
 
-  // 0% up to $94,050
-  // 15% from $94,050 to $583,750
+  // 2026 MFJ: 0% up to $98,900, 15% from $98,900 to $613,700
   const cgTax1 = calculateCapitalGainsTax(50000, 0, 'married_filing_jointly');
   assertApprox(cgTax1, 0, 0.01, '$50k capital gains with $0 other income = $0 (0% bracket)');
 
   const cgTax2 = calculateCapitalGainsTax(50000, 100000, 'married_filing_jointly');
-  // With $100k ordinary income, taxable = $70,800 after standard deduction
-  // Room in 0% bracket ($94,050): $23,250 of gains at 0%
-  // Remaining $26,750 at 15% = $4,012.50
-  assertApprox(cgTax2, 4012.50, 0.01, '$50k cap gains with $100k income (partial 0% bracket)');
+  // $100k ordinary, taxable base = $100,000 - $32,200 = $67,800
+  // Room in 0% bracket ($98,900): $31,100 of gains at 0%
+  // Remaining $18,900 at 15% = $2,835
+  assertApprox(cgTax2, 2835, 0.01, '$50k cap gains with $100k income (partial 0% bracket)');
 }
 
 // =============================================================================
@@ -670,46 +668,45 @@ function testCapitalGainsEdgeCases(): void {
 
   console.log('\n--- Capital gains with income below 0% bracket ---');
 
-  // MFJ: 0% rate up to $94,050
-  // With standard deduction of $29,200, ordinary income of $29,200 means $0 taxable
-  // All $50k of gains should be at 0%
-  const cgTax1 = calculateCapitalGainsTax(50000, 29200, 'married_filing_jointly');
+  // 2026 MFJ: 0% rate up to $98,900; std deduction $32,200
+  // Ordinary income = std deduction means $0 taxable; all $50k gains at 0%
+  const cgTax1 = calculateCapitalGainsTax(50000, 32200, 'married_filing_jointly');
   assertApprox(cgTax1, 0, 0.01, '$50k gains with income = std deduction should be 0%');
 
-  // Income at $50,000 means taxable = $20,800
-  // Room in 0% bracket = $94,050 - $20,800 = $73,250
+  // Income $50,000 means taxable base = $50,000 - $32,200 = $17,800
+  // Room in 0% bracket = $98,900 - $17,800 = $81,100
   // $50k gains all at 0%
   const cgTax2 = calculateCapitalGainsTax(50000, 50000, 'married_filing_jointly');
   assertApprox(cgTax2, 0, 0.01, '$50k gains with $50k income (all gains in 0% bracket)');
 
   console.log('\n--- Capital gains spanning multiple brackets ---');
 
-  // Income of $120,000 (taxable = $90,800)
-  // Room in 0% bracket = $94,050 - $90,800 = $3,250
-  // $100k gains: $3,250 at 0%, $96,750 at 15%
-  // Expected: $96,750 * 0.15 = $14,512.50
+  // Income of $120,000 (taxable base = $120,000 - $32,200 = $87,800)
+  // Room in 0% bracket = $98,900 - $87,800 = $11,100
+  // $100k gains: $11,100 at 0%, $88,900 at 15%
+  // Expected: $88,900 * 0.15 = $13,335
   const cgTax3 = calculateCapitalGainsTax(100000, 120000, 'married_filing_jointly');
-  assertApprox(cgTax3, 14512.50, 0.01, '$100k gains with $120k income (spanning 0%/15%)');
+  assertApprox(cgTax3, 13335, 0.01, '$100k gains with $120k income (spanning 0%/15%)');
 
   console.log('\n--- Capital gains at high income (20% bracket) ---');
 
-  // Income of $600,000 (taxable = $570,800)
-  // This is in the 15% bracket ($94,050 to $583,750)
-  // Room in 15% = $583,750 - $570,800 = $12,950
-  // $50k gains: $12,950 at 15%, $37,050 at 20%
-  // Expected: $12,950 * 0.15 + $37,050 * 0.20 = $1,942.50 + $7,410 = $9,352.50
+  // Income of $600,000 (taxable base = $600,000 - $32,200 = $567,800)
+  // This is in the 15% bracket ($98,900 to $613,700)
+  // Room in 15% = $613,700 - $567,800 = $45,900
+  // $50k gains: $45,900 at 15%, $4,100 at 20%
+  // Expected: $45,900 * 0.15 + $4,100 * 0.20 = $6,885 + $820 = $7,705
   const cgTax4 = calculateCapitalGainsTax(50000, 600000, 'married_filing_jointly');
-  assertApprox(cgTax4, 9352.50, 0.01, '$50k gains with $600k income (spanning 15%/20%)');
+  assertApprox(cgTax4, 7705, 0.01, '$50k gains with $600k income (spanning 15%/20%)');
 
   console.log('\n--- Single filer capital gains ---');
 
-  // Single: 0% up to $47,025, 15% to $518,900, 20% above
-  // Income $50k, taxable = $35,400
-  // Room in 0% = $47,025 - $35,400 = $11,625
-  // $30k gains: $11,625 at 0%, $18,375 at 15%
-  // Expected: $18,375 * 0.15 = $2,756.25
+  // 2026 Single: 0% up to $49,450, 15% to $545,500, 20% above; std $16,100
+  // Income $50k, taxable base = $50,000 - $16,100 = $33,900
+  // Room in 0% = $49,450 - $33,900 = $15,550
+  // $30k gains: $15,550 at 0%, $14,450 at 15%
+  // Expected: $14,450 * 0.15 = $2,167.50
   const cgTax5 = calculateCapitalGainsTax(30000, 50000, 'single');
-  assertApprox(cgTax5, 2756.25, 0.01, '$30k gains with $50k income (single filer)');
+  assertApprox(cgTax5, 2167.50, 0.01, '$30k gains with $50k income (single filer)');
 
   console.log('\n--- Zero capital gains ---');
 
@@ -718,9 +715,9 @@ function testCapitalGainsEdgeCases(): void {
 
   console.log('\n--- Edge case: income exactly at bracket boundary ---');
 
-  // Income exactly at $94,050 + $29,200 = $123,250 (right at 0% cap gains max)
+  // Income exactly at $98,900 + $32,200 = $131,100 (2026: right at 0% cap gains max)
   // Any gains would be at 15%
-  const cgTax7 = calculateCapitalGainsTax(10000, 123250, 'married_filing_jointly');
+  const cgTax7 = calculateCapitalGainsTax(10000, 131100, 'married_filing_jointly');
   assertApprox(cgTax7, 1500, 0.01, '$10k gains at exactly 0% bracket cap = $1,500 (15%)');
 }
 
@@ -1179,46 +1176,41 @@ function testTotalFederalTaxIntegration(): void {
 
   console.log('\n--- Combined ordinary income and capital gains ---');
 
-  // MFJ: std deduction $29,200
-  // $50k ordinary income -> taxable = $20,800 -> tax = $2,080 (10% bracket)
-  // Capital gains: $50k stacks on top
-  // Income base = $20,800, gains start here
-  // 0% bracket goes to $94,050, so $73,250 at 0%
-  // All $50k gains at 0%
-  // Total = $2,080 + $0 = $2,080
+  // 2026 MFJ: std deduction $32,200
+  // $50k ordinary -> taxable = $50,000 - $32,200 = $17,800 -> all 10% = $1,780
+  // Capital gains $50k stacks on income base $17,800
+  // 0% bracket goes to $98,900, so all $50k at 0%
+  // Total = $1,780 + $0 = $1,780
   const tax1 = calculateTotalFederalTax(50000, 50000, 'married_filing_jointly');
-  assertApprox(tax1, 2080, 0.01, 'Ordinary $50k + Cap gains $50k (gains in 0% bracket)');
+  assertApprox(tax1, 1780, 0.01, 'Ordinary $50k + Cap gains $50k (gains in 0% bracket)');
 
   console.log('\n--- High income scenario ---');
 
-  // $200k ordinary income -> taxable = $170,800
-  // Tax: $23,200 @ 10% = $2,320
-  //      $71,100 @ 12% = $8,532
-  //      $76,500 @ 22% = $16,830
-  // Total ordinary tax = $27,682
-  // Capital gains $100k starts at $170,800
-  // 0% bracket ends at $94,050 (already passed)
+  // $200k ordinary -> taxable = $200,000 - $32,200 = $167,800
+  // Tax: $24,800 @ 10% = $2,480
+  //      $76,000 @ 12% ($100,800 - $24,800) = $9,120
+  //      $67,000 @ 22% ($167,800 - $100,800) = $14,740
+  // Total ordinary tax = $26,340
+  // Capital gains $100k starts at $167,800 (past 0% cap of $98,900)
   // All $100k at 15% = $15,000
-  // Total = $27,682 + $15,000 = $42,682
+  // Total = $26,340 + $15,000 = $41,340
   const tax2 = calculateTotalFederalTax(200000, 100000, 'married_filing_jointly');
-  assertApprox(tax2, 42682, 1, 'Ordinary $200k + Cap gains $100k');
+  assertApprox(tax2, 41340, 1, 'Ordinary $200k + Cap gains $100k');
 
   console.log('\n--- Only capital gains (no ordinary income) ---');
 
   // $0 ordinary income, $100k capital gains
-  // Taxable ordinary = $0
-  // Gains start at $0
-  // 0% bracket: $94,050 at 0%
-  // 15% bracket: $5,950 at 15% = $892.50
+  // Taxable ordinary = $0; gains start at $0
+  // 2026 MFJ 0% bracket: $98,900 at 0%
+  // 15% bracket: $1,100 at 15% = $165
   const tax3 = calculateTotalFederalTax(0, 100000, 'married_filing_jointly');
-  assertApprox(tax3, 892.50, 0.01, 'Only $100k capital gains, no ordinary income');
+  assertApprox(tax3, 165, 0.01, 'Only $100k capital gains, no ordinary income');
 
   console.log('\n--- Standard deduction covers all ordinary ---');
 
-  // $29,200 ordinary (exactly std deduction), $50k gains
-  // Taxable ordinary = $0
-  // All gains at 0% (under $94,050 threshold)
-  const tax4 = calculateTotalFederalTax(29200, 50000, 'married_filing_jointly');
+  // $32,200 ordinary (exactly 2026 std deduction), $50k gains
+  // Taxable ordinary = $0; all gains at 0% (under $98,900 threshold)
+  const tax4 = calculateTotalFederalTax(32200, 50000, 'married_filing_jointly');
   assertApprox(tax4, 0, 0.01, 'Ordinary = std deduction, gains in 0% bracket');
 }
 

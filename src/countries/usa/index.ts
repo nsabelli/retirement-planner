@@ -1,6 +1,6 @@
 import type { CountryConfig, AccountTypeConfig, Region, ConversionRule, ContributionLimits, AccountGroup, PenaltyInfo } from '../index';
 import type { Profile } from '../../types';
-import { calculateTotalFederalTax, calculateCapitalGainsTax as calcCapGainsTax } from './taxes';
+import { calculateTotalFederalTax, calculateCapitalGainsTax as calcCapGainsTax, getMarginalBracket as usGetMarginalBracket } from './taxes';
 import { calculateSocialSecurityBenefits } from './benefits';
 import { calculateRMD } from './withdrawals';
 import { US_STATES } from './constants';
@@ -94,8 +94,8 @@ export const USConfig: CountryConfig = {
   currency: 'USD',
   accountTypes: US_ACCOUNT_TYPES,
 
-  calculateFederalTax: (income: number, filingStatus?: string) => {
-    return calculateTotalFederalTax(income, 0, filingStatus);
+  calculateFederalTax: (income: number, filingStatus?: string, bracketInflation = 1) => {
+    return calculateTotalFederalTax(income, 0, filingStatus, bracketInflation);
   },
 
   calculateRegionalTax: (_income: number, _regionCode: string) => {
@@ -109,9 +109,14 @@ export const USConfig: CountryConfig = {
     gains: number,
     ordinaryIncome: number,
     _regionCode: string,
-    filingStatus?: string
+    filingStatus?: string,
+    bracketInflation = 1
   ) => {
-    return calcCapGainsTax(gains, ordinaryIncome, filingStatus);
+    return calcCapGainsTax(gains, ordinaryIncome, filingStatus, bracketInflation);
+  },
+
+  getMarginalBracket: (ordinaryIncome: number, filingStatus?: string, bracketInflation = 1) => {
+    return usGetMarginalBracket(ordinaryIncome, filingStatus, bracketInflation);
   },
 
   getRegions: (): Region[] => {

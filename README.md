@@ -72,8 +72,9 @@ The withdrawal algorithm follows a tax-efficient strategy:
 ### Tax Calculations
 
 #### United States
-- 2024 Federal income tax brackets (Single and Married Filing Jointly)
-- Long-term capital gains rates with 0%/15%/20% brackets
+- 2026 Federal income tax brackets (Single and Married Filing Jointly), per IRS Rev. Proc. 2025-32
+- Long-term capital gains rates with 0%/15%/20% brackets (2026 thresholds)
+- Brackets, standard deduction, and capital gains thresholds are projected forward each year by the inflation rate, mirroring the IRS's annual inflation indexing (base year 2026)
 - State tax rate configuration
 - Standard deduction applied automatically
 - Social Security taxation (85% taxable)
@@ -104,15 +105,15 @@ Full visibility into how every number is calculated:
 
 - **Methodology Tab**: Complete reference documentation including:
   - All formulas used in accumulation and withdrawal phases
-  - 2024 federal tax brackets (Single and MFJ)
-  - Long-term capital gains rate tables
+  - 2026 federal tax brackets (Single and MFJ), inflation-projected
+  - Long-term capital gains rate tables (2026 thresholds)
   - IRS Required Minimum Distribution (RMD) table
   - Tax-optimized withdrawal strategy explanation
   - Important assumptions and limitations
 
 - **Year-by-Year Data Tables**: Expandable tables showing detailed projections:
   - *Accumulation Phase*: Summary, per-account balances, and contributions (with employer match)
-  - *Withdrawal Phase*: Income & spending, income streams breakdown, withdrawals by account, remaining balances, and tax details
+  - *Withdrawal Phase*: Income & spending, income streams breakdown, withdrawals by account, remaining balances, and tax details — including a **Tax Bracket** column (the year's marginal ordinary-income bracket with its inflation-projected dollar range, shown after Total Tax)
   - Lifetime totals and color-coded by tax treatment
 
 - **Expandable Summary Cards**: Click any summary metric to see:
@@ -263,7 +264,7 @@ For each year of retirement:
 - Contributions are made at year-end
 - RMDs follow the IRS Uniform Lifetime Table
 - Income streams and government benefits grow with inflation
-- Tax brackets are 2024 values (not inflation-adjusted)
+- US federal tax brackets, standard deduction, and capital gains thresholds are 2026 IRS values (Rev. Proc. 2025-32), projected forward each year by the inflation rate (base year 2026). Canadian brackets remain 2024 static values.
 
 ## Configuration
 

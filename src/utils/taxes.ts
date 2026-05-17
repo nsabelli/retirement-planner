@@ -8,22 +8,39 @@ import {
   CAPITAL_GAINS_BRACKETS_SINGLE,
 } from './constants';
 
-export function getTaxBrackets(filingStatus: FilingStatus): TaxBracket[] {
-  return filingStatus === 'married_filing_jointly'
+/**
+ * Scale a bracket table by an inflation factor. Brackets are 2026 IRS values;
+ * the IRS indexes thresholds to inflation, so projecting them forward keeps the
+ * model consistent with inflated (nominal) income in future years.
+ */
+function scaleBrackets(brackets: TaxBracket[], bracketInflation: number): TaxBracket[] {
+  if (bracketInflation === 1) return brackets;
+  return brackets.map(b => ({
+    min: b.min * bracketInflation,
+    max: b.max === Infinity ? Infinity : b.max * bracketInflation,
+    rate: b.rate,
+  }));
+}
+
+export function getTaxBrackets(filingStatus: FilingStatus, bracketInflation = 1): TaxBracket[] {
+  const base = filingStatus === 'married_filing_jointly'
     ? TAX_BRACKETS_MFJ
     : TAX_BRACKETS_SINGLE;
+  return scaleBrackets(base, bracketInflation);
 }
 
-export function getStandardDeduction(filingStatus: FilingStatus): number {
-  return filingStatus === 'married_filing_jointly'
+export function getStandardDeduction(filingStatus: FilingStatus, bracketInflation = 1): number {
+  const base = filingStatus === 'married_filing_jointly'
     ? STANDARD_DEDUCTION_MFJ
     : STANDARD_DEDUCTION_SINGLE;
+  return base * bracketInflation;
 }
 
-export function getCapitalGainsBrackets(filingStatus: FilingStatus): TaxBracket[] {
-  return filingStatus === 'married_filing_jointly'
+export function getCapitalGainsBrackets(filingStatus: FilingStatus, bracketInflation = 1): TaxBracket[] {
+  const base = filingStatus === 'married_filing_jointly'
     ? CAPITAL_GAINS_BRACKETS_MFJ
     : CAPITAL_GAINS_BRACKETS_SINGLE;
+  return scaleBrackets(base, bracketInflation);
 }
 
 /**
@@ -31,11 +48,12 @@ export function getCapitalGainsBrackets(filingStatus: FilingStatus): TaxBracket[
  */
 export function calculateFederalIncomeTax(
   taxableIncome: number,
-  filingStatus: FilingStatus
+  filingStatus: FilingStatus,
+  bracketInflation = 1
 ): number {
   if (taxableIncome <= 0) return 0;
 
-  const brackets = getTaxBrackets(filingStatus);
+  const brackets = getTaxBrackets(filingStatus, bracketInflation);
   let tax = 0;
   let remainingIncome = taxableIncome;
 
@@ -59,12 +77,13 @@ export function calculateFederalIncomeTax(
 export function calculateCapitalGainsTax(
   capitalGains: number,
   otherTaxableIncome: number,
-  filingStatus: FilingStatus
+  filingStatus: FilingStatus,
+  bracketInflation = 1
 ): number {
   if (capitalGains <= 0) return 0;
 
-  const brackets = getCapitalGainsBrackets(filingStatus);
-  const standardDeduction = getStandardDeduction(filingStatus);
+  const brackets = getCapitalGainsBrackets(filingStatus, bracketInflation);
+  const standardDeduction = getStandardDeduction(filingStatus, bracketInflation);
 
   // Capital gains stack on top of ordinary income for bracket determination
   const incomeBase = Math.max(0, otherTaxableIncome - standardDeduction);
@@ -102,13 +121,14 @@ export function calculateCapitalGainsTax(
 export function calculateTotalFederalTax(
   ordinaryIncome: number, // Traditional withdrawals, SS, etc.
   capitalGains: number, // Growth portion of taxable account withdrawals
-  filingStatus: FilingStatus
+  filingStatus: FilingStatus,
+  bracketInflation = 1
 ): number {
-  const standardDeduction = getStandardDeduction(filingStatus);
+  const standardDeduction = getStandardDeduction(filingStatus, bracketInflation);
   const taxableOrdinaryIncome = Math.max(0, ordinaryIncome - standardDeduction);
 
-  const incomeTax = calculateFederalIncomeTax(taxableOrdinaryIncome, filingStatus);
-  const capitalGainsTax = calculateCapitalGainsTax(capitalGains, ordinaryIncome, filingStatus);
+  const incomeTax = calculateFederalIncomeTax(taxableOrdinaryIncome, filingStatus, bracketInflation);
+  const capitalGainsTax = calculateCapitalGainsTax(capitalGains, ordinaryIncome, filingStatus, bracketInflation);
 
   return incomeTax + capitalGainsTax;
 }
@@ -128,14 +148,15 @@ export function calculateStateTax(
  */
 export function getMarginalTaxRate(
   currentTaxableIncome: number,
-  filingStatus: FilingStatus
+  filingStatus: FilingStatus,
+  bracketInflation = 1
 ): number {
-  const standardDeduction = getStandardDeduction(filingStatus);
+  const standardDeduction = getStandardDeduction(filingStatus, bracketInflation);
   const adjustedIncome = currentTaxableIncome - standardDeduction;
 
   if (adjustedIncome <= 0) return 0;
 
-  const brackets = getTaxBrackets(filingStatus);
+  const brackets = getTaxBrackets(filingStatus, bracketInflation);
 
   for (const bracket of brackets) {
     if (adjustedIncome <= bracket.max) {
@@ -144,6 +165,25 @@ export function getMarginalTaxRate(
   }
 
   return brackets[brackets.length - 1].rate;
+}
+
+/**
+ * Marginal ordinary-income bracket (inflation-projected) for the given gross
+ * ordinary income. Fallback equivalent of the US country config's
+ * getMarginalBracket, used when no country config is supplied.
+ */
+export function getMarginalBracket(
+  ordinaryIncome: number,
+  filingStatus: FilingStatus,
+  bracketInflation = 1
+): TaxBracket {
+  const brackets = getTaxBrackets(filingStatus, bracketInflation);
+  const standardDeduction = getStandardDeduction(filingStatus, bracketInflation);
+  const taxable = Math.max(0, ordinaryIncome - standardDeduction);
+  for (const bracket of brackets) {
+    if (taxable < bracket.max) return bracket;
+  }
+  return brackets[brackets.length - 1];
 }
 
 /**
@@ -187,10 +227,11 @@ export function getWithdrawalToFillBracket(
 export function getConversionToTopOfBracket(
   currentOrdinaryIncome: number,
   targetBracketRate: number,
-  filingStatus: FilingStatus
+  filingStatus: FilingStatus,
+  bracketInflation = 1
 ): number {
-  const standardDeduction = getStandardDeduction(filingStatus);
-  const brackets = getTaxBrackets(filingStatus);
+  const standardDeduction = getStandardDeduction(filingStatus, bracketInflation);
+  const brackets = getTaxBrackets(filingStatus, bracketInflation);
 
   const targetBracket = brackets.find(b => b.rate === targetBracketRate);
   if (!targetBracket) return 0;

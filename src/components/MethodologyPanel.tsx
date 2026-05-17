@@ -262,7 +262,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
                 <div>
                   <strong className="text-gray-800 dark:text-gray-200">Fill 12% Tax Bracket</strong>
                   <p className="text-gray-600 dark:text-gray-400">
-                    Additional traditional withdrawals to fill the 12% bracket (up to {formatCurrency(standardDeduction + (isMarried ? 94300 : 47150))} total ordinary income).
+                    Additional traditional withdrawals to fill the 12% bracket (up to {formatCurrency(standardDeduction + (isMarried ? 100800 : 50400))} total ordinary income in 2026 dollars; thresholds are inflation-projected each year).
                   </p>
                 </div>
               </li>
@@ -394,7 +394,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           {isCanada
             ? '2024 Canadian Federal Tax Brackets'
-            : `2024 Federal Tax Brackets (${isMarried ? 'Married Filing Jointly' : 'Single'})`
+            : `2026 Federal Tax Brackets (${isMarried ? 'Married Filing Jointly' : 'Single'})`
           }
         </h3>
         <div className="overflow-x-auto">
@@ -422,7 +422,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
         <p className="mt-3 text-xs text-gray-500 dark:text-gray-500">
           {isCanada
             ? `Basic personal amount of ${formatCurrency(CA_BASIC_PERSONAL, currency)} is a non-refundable tax credit.`
-            : `Standard deduction of ${formatCurrency(standardDeduction)} is subtracted before applying brackets.`
+            : `Standard deduction of ${formatCurrency(standardDeduction)} (2026) is subtracted before applying brackets. These 2026 IRS values and the standard deduction are projected forward each year by the inflation rate, mirroring the IRS's annual inflation indexing.`
           }
         </p>
       </section>
@@ -465,7 +465,7 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
       {!isCanada && (
         <section className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            2024 Long-Term Capital Gains Rates ({isMarried ? 'Married Filing Jointly' : 'Single'})
+            2026 Long-Term Capital Gains Rates ({isMarried ? 'Married Filing Jointly' : 'Single'})
           </h3>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -623,7 +623,11 @@ export function MethodologyPanel({ profile, assumptions }: MethodologyPanelProps
         <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
           <li className="flex gap-2">
             <span className="flex-shrink-0">*</span>
-            <span>Tax brackets are for 2024 and don't adjust for inflation in future years.</span>
+            <span>
+              {isCanada
+                ? "Canadian tax brackets are 2024 values and don't adjust for inflation in future years."
+                : 'US federal tax brackets, standard deduction, and capital gains thresholds use 2026 IRS values (Rev. Proc. 2025-32), projected forward each year by the inflation rate to mirror the IRS\'s annual inflation indexing. State tax remains a flat rate.'}
+            </span>
           </li>
           {isCanada ? (
             <>

@@ -16,12 +16,17 @@ import {
   calculateStateTax,
   getStandardDeduction,
   getConversionToTopOfBracket,
+  getMarginalBracket,
 } from './taxes';
 import { getRMDDivisor, RMD_START_AGE } from './constants';
 import type { CountryConfig } from '../countries';
 import { calculatePenalties, type AccountWithdrawal } from './penaltyCalculator';
 import { getDefaultWithdrawalAge } from './withdrawalDefaults';
 import { calculateIncomeStreamBenefits } from './incomeStreams';
+
+// The federal tax brackets / standard deduction in constants are 2026 IRS
+// values; this is the base year from which they are inflation-projected.
+const TAX_BASE_YEAR = 2026;
 
 interface AccountState {
   id: string;
@@ -91,18 +96,20 @@ function computeIncomeTaxes(
   ordinaryIncome: number,
   capitalGains: number,
   profile: Profile,
-  countryConfig?: CountryConfig
+  countryConfig?: CountryConfig,
+  bracketInflation = 1
 ): { federalTax: number; stateTax: number } {
   let federalTax: number;
   let stateTax: number;
 
   if (countryConfig) {
-    federalTax = countryConfig.calculateFederalTax(ordinaryIncome, profile.filingStatus);
+    federalTax = countryConfig.calculateFederalTax(ordinaryIncome, profile.filingStatus, bracketInflation);
     federalTax += countryConfig.calculateCapitalGainsTax(
       capitalGains,
       ordinaryIncome,
       profile.region || '',
-      profile.filingStatus
+      profile.filingStatus,
+      bracketInflation
     );
     stateTax = countryConfig.calculateRegionalTax(
       ordinaryIncome + capitalGains,
@@ -110,7 +117,7 @@ function computeIncomeTaxes(
     );
     if (countryConfig.code === 'US') {
       stateTax = calculateStateTax(
-        ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
+        ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single', bracketInflation),
         profile.stateTaxRate || 0
       );
     }
@@ -118,10 +125,11 @@ function computeIncomeTaxes(
     federalTax = calculateTotalFederalTax(
       ordinaryIncome,
       capitalGains,
-      profile.filingStatus || 'single'
+      profile.filingStatus || 'single',
+      bracketInflation
     );
     stateTax = calculateStateTax(
-      ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single'),
+      ordinaryIncome + capitalGains - getStandardDeduction(profile.filingStatus || 'single', bracketInflation),
       profile.stateTaxRate || 0
     );
   }
@@ -148,6 +156,7 @@ function solveAfterTaxSpendTarget(
   governmentBenefitIncome: number,
   inflatedStreamIncome: number,
   bracketCommittedOrdinaryIncome: number,
+  bracketInflation: number,
   strategy?: WithdrawalStrategySettings
 ): number {
   let solved = afterTaxTarget;
@@ -165,7 +174,8 @@ function solveAfterTaxSpendTarget(
       age,
       countryConfig,
       bracketCommittedOrdinaryIncome,
-      strategy
+      strategy,
+      bracketInflation
     );
     const trialPenalties = countryConfig
       ? calculatePenalties(trial.accountWithdrawals, age, countryConfig)
@@ -175,7 +185,8 @@ function solveAfterTaxSpendTarget(
       trial.traditionalWithdrawal + fixedOrdinaryIncome,
       trial.taxableGains,
       profile,
-      countryConfig
+      countryConfig,
+      bracketInflation
     );
     const trialAfterTax = trial.total + governmentBenefitIncome +
       inflatedStreamIncome - (tFed + tState + trialPenaltyTotal);
@@ -247,6 +258,14 @@ export function calculateWithdrawals(
     // Common inflation factor for this year
     const yearsFromNow = age - profile.currentAge;
     const inflationMultiplier = Math.pow(1 + assumptions.inflationRate, yearsFromNow);
+
+    // Tax brackets / standard deduction are 2026 IRS values. The IRS indexes
+    // these to inflation, so project them forward from the 2026 base tax year
+    // to keep them consistent with inflated (nominal) income in future years.
+    const bracketInflation = Math.pow(
+      1 + assumptions.inflationRate,
+      Math.max(0, year - TAX_BASE_YEAR)
+    );
 
     // Calculate government retirement benefits (Social Security, CPP/OAS, etc.)
     let governmentBenefits = 0;
@@ -325,7 +344,8 @@ export function calculateWithdrawals(
           const bracketRoom = getConversionToTopOfBracket(
             nonPortfolioTaxableIncome,
             conversionSettings.targetBracketRate,
-            filingStatus
+            filingStatus,
+            bracketInflation
           );
 
           // Ensure the conversion doesn't push total ordinary income above the target
@@ -351,6 +371,7 @@ export function calculateWithdrawals(
                 governmentBenefitIncome,
                 inflatedStreamIncome,
                 nonPortfolioTaxableIncome,
+                bracketInflation,
                 withdrawalStrategy
               )
             : targetSpending;
@@ -413,6 +434,7 @@ export function calculateWithdrawals(
           governmentBenefitIncome,
           inflatedStreamIncome,
           nonPortfolioTaxableIncome + rothConversionAmount,
+          bracketInflation,
           withdrawalStrategy
         )
       : targetSpending;
@@ -431,7 +453,8 @@ export function calculateWithdrawals(
       age,
       countryConfig,
       nonPortfolioTaxableIncome + rothConversionAmount,
-      withdrawalStrategy
+      withdrawalStrategy,
+      bracketInflation
     );
 
     // Calculate early withdrawal penalties
@@ -451,9 +474,15 @@ export function calculateWithdrawals(
       ordinaryIncome,
       capitalGains,
       profile,
-      countryConfig
+      countryConfig,
+      bracketInflation
     );
     const totalTax = federalTax + stateTax + totalPenalties;
+
+    // Marginal ordinary-income bracket for this year (inflation-projected).
+    const marginalBracket = countryConfig?.getMarginalBracket
+      ? countryConfig.getMarginalBracket(ordinaryIncome, profile.filingStatus, bracketInflation)
+      : getMarginalBracket(ordinaryIncome, profile.filingStatus || 'single', bracketInflation);
     lifetimeTaxesPaid += totalTax;
 
     const grossWithdrawal = withdrawals.total;
@@ -484,6 +513,7 @@ export function calculateWithdrawals(
       federalTax,
       stateTax,
       totalTax,
+      taxBracket: marginalBracket,
       afterTaxIncome,
       targetSpending,
       rmdAmount,
@@ -534,7 +564,8 @@ function performTaxOptimizedWithdrawal(
   age: number,
   countryConfig?: CountryConfig,
   nonPortfolioTaxableIncome?: number,
-  strategy?: WithdrawalStrategySettings
+  strategy?: WithdrawalStrategySettings,
+  bracketInflation = 1
 ): WithdrawalResult {
   const fillTaxBracket = strategy?.fillTaxBracket ?? true;
   const withdrawalOrder: AccountTypeGroup[] = strategy?.withdrawalOrder ?? ['roth', 'taxable', 'hsa', 'traditional'];
@@ -629,8 +660,9 @@ function performTaxOptimizedWithdrawal(
   // Step 2: Fill tax bracket with traditional withdrawals (optional)
   if (fillTaxBracket) {
     const filingStatus = profile.filingStatus || 'single';
-    const standardDeduction = getStandardDeduction(filingStatus);
-    const bracket12Max = filingStatus === 'married_filing_jointly' ? 94300 : 47150;
+    const standardDeduction = getStandardDeduction(filingStatus, bracketInflation);
+    // Top of the 2026 12% bracket, projected forward by inflation
+    const bracket12Max = (filingStatus === 'married_filing_jointly' ? 100800 : 50400) * bracketInflation;
     const targetOrdinaryIncome = standardDeduction + bracket12Max;
     const currentOrdinaryIncome = result.traditionalWithdrawal + (nonPortfolioTaxableIncome || 0);
     const roomIn12Bracket = Math.max(0, targetOrdinaryIncome - currentOrdinaryIncome);

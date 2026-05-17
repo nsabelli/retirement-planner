@@ -21,6 +21,11 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function formatBracketRange(min: number, max: number): string {
+  const lo = formatCurrency(min);
+  return max === Infinity ? `${lo}+` : `${lo} – ${formatCurrency(max)}`;
+}
+
 type ViewMode = 'combined' | 'income' | 'withdrawals' | 'balances' | 'taxes' | 'incomeStreams';
 
 export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: DataTableWithdrawalProps) {
@@ -145,6 +150,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                     <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-500">Penalties</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Tax Bracket</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Eff. Rate</th>
                     <th className="text-right py-2 px-2 font-medium text-teal-600 dark:text-teal-400">After-Tax Spendable</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Remaining Balance</th>
@@ -170,6 +176,10 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                         <td className="py-2 px-2 text-right font-mono text-orange-600 dark:text-orange-400">{formatCurrency(yearData.stateTax)}</td>
                         <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-500">{yearData.totalPenalties > 0 ? formatCurrency(yearData.totalPenalties) : '-'}</td>
                         <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.totalTax)}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-700 dark:text-gray-300">
+                          <div>{(yearData.taxBracket.rate * 100).toFixed(0)}%</div>
+                          <div className="text-xs text-gray-400 dark:text-gray-500">{formatBracketRange(yearData.taxBracket.min, yearData.taxBracket.max)}</div>
+                        </td>
                         <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(effectiveRate)}</td>
                         <td className="py-2 px-2 text-right font-mono text-teal-600 dark:text-teal-400">{formatCurrency(yearData.afterTaxIncome)}</td>
                         <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatCurrency(yearData.totalRemainingBalance)}</td>
@@ -193,6 +203,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                     <td className="py-2 px-2 text-right font-mono font-medium text-orange-600 dark:text-orange-400">{formatCurrency(sum(y => y.stateTax))}</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-500">{formatCurrency(sum(y => y.totalPenalties))}</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">{formatCurrency(result.lifetimeTaxesPaid)}</td>
+                    <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(totalGrossIncome > 0 ? result.lifetimeTaxesPaid / totalGrossIncome : 0)}</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-teal-600 dark:text-teal-400">{formatCurrency(sum(y => y.afterTaxIncome))}</td>
                     <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">-</td>
@@ -370,6 +381,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                     <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Penalties</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Total Tax</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Tax Bracket</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Effective Rate</th>
                   </tr>
                 </thead>
@@ -404,6 +416,10 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                             )}
                           </td>
                           <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.totalTax)}</td>
+                          <td className="py-2 px-2 text-right font-mono text-gray-700 dark:text-gray-300">
+                            <div>{(yearData.taxBracket.rate * 100).toFixed(0)}%</div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500">{formatBracketRange(yearData.taxBracket.min, yearData.taxBracket.max)}</div>
+                          </td>
                           <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(effectiveRate)}</td>
                         </tr>
                         {hasPenalties && isPenaltyExpanded && yearData.earlyWithdrawalPenalties.length > 0 && (
@@ -446,6 +462,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                     <td className="py-2 px-2 text-right font-mono font-medium text-red-600 dark:text-red-400">
                       {formatCurrency(result.lifetimeTaxesPaid)}
                     </td>
+                    <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
                       {formatPercent(totalGrossIncome > 0 ? result.lifetimeTaxesPaid / totalGrossIncome : 0)}
                     </td>

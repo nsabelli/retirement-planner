@@ -129,6 +129,9 @@ export interface YearlyWithdrawal {
   federalTax: number;
   stateTax: number;
   totalTax: number;
+  // Marginal ordinary-income tax bracket for the year, with inflation-projected
+  // (nominal) min/max thresholds. rate is the marginal rate as a decimal.
+  taxBracket: TaxBracket;
   afterTaxIncome: number;
   targetSpending: number;
   rmdAmount: number;
