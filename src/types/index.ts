@@ -158,6 +158,18 @@ export interface AppState {
   assumptions: Assumptions;
 }
 
+export interface Scenario {
+  id: string;
+  name: string;
+  createdAt: number;
+  country: CountryCode;
+  accounts: Account[];
+  profile: Profile;
+  assumptions: Assumptions;
+  incomeStreams: IncomeStream[];
+  withdrawalStrategy: WithdrawalStrategySettings;
+}
+
 // Tax bracket structure
 export interface TaxBracket {
   min: number;

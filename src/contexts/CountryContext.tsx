@@ -6,6 +6,8 @@ interface CountryContextValue {
   country: CountryCode;
   config: CountryConfig;
   setCountry: (country: CountryCode) => void;
+  // Programmatic switch without confirm dialog — used when loading a scenario
+  setCountryDirect: (country: CountryCode) => void;
 }
 
 const CountryContext = createContext<CountryContextValue | undefined>(undefined);
@@ -61,8 +63,13 @@ export function CountryProvider({ children, initialCountry = 'US', onCountryChan
     }
   }, [country, onCountryChange]);
 
+  const setCountryDirect = useCallback((newCountry: CountryCode) => {
+    setCountryState(newCountry);
+    setConfig(getCountryConfig(newCountry));
+  }, []);
+
   return (
-    <CountryContext.Provider value={{ country, config, setCountry }}>
+    <CountryContext.Provider value={{ country, config, setCountry, setCountryDirect }}>
       {children}
     </CountryContext.Provider>
   );

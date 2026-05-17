@@ -37,7 +37,8 @@ This is a React retirement planning calculator that projects portfolio growth an
 
 ### Data Flow
 
-- `App.tsx` holds state for accounts, profile, and assumptions (persisted to localStorage via `useLocalStorage` hook)
+- `useScenarios` hook (`src/hooks/useScenarios.ts`) is the primary state store. All user-enterable data lives inside a `Scenario` object in a `retirement-planner-scenarios` localStorage array. The active scenario ID is stored at `retirement-planner-active-scenario-id`.
+- `App.tsx` (`AppContent`) reads from `useScenarios`, passes data to child components, and writes back via the hook's setters (which auto-save to the active scenario).
 - `useRetirementCalc` hook orchestrates calculations, returning `AccumulationResult` and `RetirementResult`
 - Chart components receive results and render visualizations using Recharts
 
@@ -48,6 +49,17 @@ This is a React retirement planning calculator that projects portfolio growth an
 - `Assumptions`: Economic parameters (inflation, withdrawal rate, retirement return, withdrawal mode, target monthly spending)
 - `AccumulationResult` / `RetirementResult`: Yearly projections with balances, withdrawals, taxes, effective withdrawal rate
 - `YearlyWithdrawal`: Per-year retirement data including `conversionByAccount` (per-account Roth conversion outflows, separate from spending withdrawals) and `taxBracket` (the year's marginal ordinary-income `TaxBracket` with inflation-projected nominal `min`/`max`)
+- `Scenario`: Named snapshot of all user-enterable state — `id`, `name`, `createdAt`, `country`, `accounts`, `profile`, `assumptions`, `incomeStreams`, `withdrawalStrategy`
+
+### Scenarios Feature
+
+- **Storage**: `retirement-planner-scenarios: Scenario[]` + `retirement-planner-active-scenario-id: string`
+- **Migration**: On first load with no scenarios key, `useScenarios` reads legacy individual localStorage keys (`retirement-planner-accounts`, `-profile`, etc.) into a "My Plan" scenario automatically.
+- **Auto-save**: Every setter call (e.g. `setProfile`, `setAccounts`) patches the active scenario in-place — no explicit save step.
+- **`useScenarios` hook** (`src/hooks/useScenarios.ts`): exports `createDefaultScenarioData(country)` (shared with the outer `App` country-change handler), `loadScenario`, `createScenario`, `renameScenario`, `deleteScenario`, and per-field setters.
+- **`ScenarioSelector` component** (`src/components/ScenarioSelector.tsx`): rendered in `Layout` header next to `CountrySelector`. Provides a `<select>` dropdown to switch scenarios, rename (inline edit), "+ New" (inline panel with "Copy current" and "Start from defaults" options), and delete (inline confirm, disabled when only one scenario exists).
+- **Country switching when loading a scenario**: `AppContent` calls `setCountryDirect` (added to `CountryContext`) before `loadScenario` when the target scenario has a different country. `setCountryDirect` bypasses the confirm dialog and `onCountryChange` callback — it's purely a programmatic context update.
+- **Country switching via `CountrySelector`**: unchanged — triggers the confirm dialog, then the outer `App.handleCountryChange` writes updated scenario data (with country defaults) to `retirement-planner-scenarios` in localStorage and reloads.
 
 ### Key Features
 

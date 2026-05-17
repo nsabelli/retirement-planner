@@ -6,9 +6,10 @@ interface LayoutProps {
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onReset: () => void;
+  scenarioSelector?: ReactNode;
 }
 
-export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: LayoutProps) {
+export function Layout({ children, isDarkMode, onToggleDarkMode, onReset, scenarioSelector }: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
@@ -24,9 +25,10 @@ export function Layout({ children, isDarkMode, onToggleDarkMode, onReset }: Layo
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
                 Plan your financial future with tax-optimized projections
               </p>
-              {/* Country Selector - Always visible below subtitle */}
-              <div className="mt-2">
+              {/* Country and Scenario selectors */}
+              <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
                 <CountrySelector />
+                {scenarioSelector}
               </div>
             </div>
 
