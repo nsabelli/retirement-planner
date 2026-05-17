@@ -60,7 +60,7 @@ Both the monthly withdrawal amount and the effective withdrawal rate are always 
 
 ### Tax-Optimized Withdrawals
 The withdrawal algorithm follows a tax-efficient strategy:
-1. **Roth Conversions (pre-RMD)**: Each year before RMD age, convert from traditional accounts to Roth up to the top of a user-selected tax bracket — filling the 10%, 12%, 22%, 24%, or 32% bracket. The conversion amount is limited to keep total ordinary income (existing SS/pension income + conversion) within the selected bracket. Conversion is skipped if spending needs would force additional traditional withdrawals that exceed the bracket regardless. In Target Monthly Spending mode this check uses the grossed-up (tax-inclusive) spending need, so the safety guard accounts for the higher real withdrawal.
+1. **Roth Conversions (pre-RMD)**: Each year before RMD age, convert from traditional accounts to Roth — filling toward the top of a user-selected tax bracket (10%, 12%, 22%, 24%, or 32%). The conversion only uses the bracket room that **remains after the ordinary income needed to fund that year's spendable target — including the gross-up to pay the conversion's own tax**. Because converting more raises taxes (and, in Target Monthly Spending mode, the gross-up that funds them), which in turn consumes bracket room, the conversion amount is solved iteratively until total ordinary income (SS/pension + spending-driven traditional withdrawals + conversion) lands exactly at the selected bracket's top instead of overshooting it.
 2. **Required Minimum Distributions (RMDs)**: Mandatory withdrawals from traditional accounts starting at age 73
 3. **Account Availability**: Respects configured withdrawal start ages (e.g., delaying IRA withdrawals until age 60)
 4. **Early Withdrawal Penalties**: Calculates 10% penalty for US traditional account withdrawals before age 59.5
@@ -246,7 +246,7 @@ For each year until retirement:
 ### Withdrawal Phase
 For each year of retirement:
 1. Determine target spending — either `portfolio × safeWithdrawalRate` (gross) or `targetMonthlySpending × 12` (after-tax), inflated each year
-2. If pre-RMD age and Roth conversion enabled: compute bracket room from existing income, check spending coverage (using the grossed-up need in Target Monthly Spending mode), convert up to the bracket top
+2. If pre-RMD age and Roth conversion enabled: iteratively solve the conversion amount so that spending-driven traditional income (including the gross-up to pay the conversion's own tax) plus the conversion fills the selected bracket exactly without overshooting
 3. Calculate Required Minimum Distribution (if age 73+)
 4. Subtract income streams and government benefits from spending need
 5. In Target Monthly Spending mode, iteratively gross up the withdrawal so after-tax spendable cash meets the target (a larger withdrawal raises taxes, raising the need); SWR mode withdraws exactly `portfolio × rate`
@@ -256,7 +256,8 @@ For each year of retirement:
 9. Report effective withdrawal rate (`annualTarget ÷ portfolioAtRetirement`)
 
 **Income definitions used in year-by-year data:**
-- *Gross Taxable Income* = ordinary income (traditional withdrawals + Roth conversion + taxable SS/pensions) + capital gains — this is the income that determines your tax bracket and effective rate
+- *Gross Income* = ordinary income (traditional withdrawals + Roth conversion + taxable SS/pensions) + capital gains — total income subject to tax, and the basis for the effective rate
+- *Taxable Income* = Gross Income − the standard deduction (inflation-projected from 2026; for Canada this equals Gross Income since the basic personal amount is a credit) — the amount tax brackets are applied to
 - *After-Tax Spendable* = all portfolio spending withdrawals (incl. tax-free Roth) + SS/pensions − total taxes — actual cash available to spend each year
 
 ### Key Assumptions

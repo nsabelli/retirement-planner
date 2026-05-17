@@ -180,8 +180,11 @@ export function getMarginalBracket(
   const brackets = getTaxBrackets(filingStatus, bracketInflation);
   const standardDeduction = getStandardDeduction(filingStatus, bracketInflation);
   const taxable = Math.max(0, ordinaryIncome - standardDeduction);
+  // $1 tolerance: income filled exactly to a bracket's top (e.g. a Roth
+  // conversion that fills the selected bracket) reads as that bracket, not
+  // the next one, and avoids sub-dollar float jitter at the boundary.
   for (const bracket of brackets) {
-    if (taxable < bracket.max) return bracket;
+    if (taxable <= bracket.max + 1) return bracket;
   }
   return brackets[brackets.length - 1];
 }

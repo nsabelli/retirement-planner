@@ -125,7 +125,8 @@ export interface YearlyWithdrawal {
   totalWithdrawal: number; // spending withdrawals only (excludes Roth conversion)
   governmentBenefitIncome: number;  // was socialSecurityIncome — Canada CPP/OAS only
   incomeStreamIncome: number;       // user-defined income streams (SS, pensions, etc.)
-  grossIncome: number; // includes Roth conversion amount
+  grossIncome: number; // ordinaryIncome + capitalGains (before standard deduction); includes Roth conversion
+  taxableIncome: number; // grossIncome after the inflation-projected standard deduction (US); = grossIncome for Canada
   federalTax: number;
   stateTax: number;
   totalTax: number;

@@ -341,51 +341,94 @@ export function calculateWithdrawals(
 
         if (preRMD) {
           const filingStatus = profile.filingStatus || 'single';
-          const bracketRoom = getConversionToTopOfBracket(
-            nonPortfolioTaxableIncome,
-            conversionSettings.targetBracketRate,
-            filingStatus,
-            bracketInflation
+          const preConvSnapshot = accountStates.map(s => ({ ...s }));
+          const rothId = rothState.id;
+          const totalTraditionalBalance = traditionalStates.reduce(
+            (sum, acc) => sum + acc.balance,
+            0
           );
+          const conversionCap = conversionSettings.maxAnnualConversion > 0
+            ? conversionSettings.maxAnnualConversion
+            : Infinity;
 
-          // Ensure the conversion doesn't push total ordinary income above the target
-          // bracket. After conversion, spending comes from the grown Roth balance.
-          // If non-traditional assets (including the conversion growing Roth) can cover
-          // the full spending need, traditional withdrawals for spending are $0 and the
-          // bracket limit holds. Otherwise the spending shortfall forces traditional
-          // withdrawals that blow past the bracket regardless, so skip converting.
-          // In target_spending mode the gross withdrawal is grossed up for taxes, so
-          // size the spending need against that real (higher) gross, not the after-tax
-          // target — otherwise the guard underestimates the need and converts unsafely.
-          const grossSpendTarget = mode === 'target_spending'
-            ? solveAfterTaxSpendTarget(
-                accountStates.map(s => ({ ...s })),
-                accounts,
-                targetSpending,
-                rmdAmount,
-                totalRetirementIncome,
-                profile,
-                age,
-                countryConfig,
-                nonPortfolioTaxableIncome,
-                governmentBenefitIncome,
-                inflatedStreamIncome,
-                nonPortfolioTaxableIncome,
-                bracketInflation,
-                withdrawalStrategy
-              )
-            : targetSpending;
-          const spendingNeed = Math.max(0, grossSpendTarget - totalRetirementIncome);
-          const availableNonTraditional = accountStates
-            .filter(acc => !isTraditionalAccount(acc.type))
-            .reduce((sum, acc) => sum + acc.balance, 0);
-          const room = (availableNonTraditional + bracketRoom >= spendingNeed)
-            ? bracketRoom
-            : 0;
+          // For a candidate conversion, simulate it on a clone and return the
+          // traditional spending withdrawal the committed run would make. The
+          // conversion is taxable, so in target_spending mode the gross-up
+          // pulls extra traditional withdrawals to pay that tax — which is
+          // exactly the ordinary income that must be left room for.
+          const spendingTradForConversion = (desiredC: number): number => {
+            const clone = preConvSnapshot.map(s => ({ ...s }));
+            let remainingC = Math.max(0, desiredC);
+            let actualC = 0;
+            for (const acc of clone) {
+              if (remainingC <= 0) break;
+              if (!isTraditionalAccount(acc.type) || acc.balance <= 0) continue;
+              const conv = Math.min(remainingC, acc.balance);
+              acc.balance -= conv;
+              remainingC -= conv;
+              actualC += conv;
+            }
+            const rothClone = clone.find(a => a.id === rothId);
+            if (rothClone) rothClone.balance += actualC;
+            const fixedOrd = actualC + nonPortfolioTaxableIncome;
+            const grossSpend = mode === 'target_spending'
+              ? solveAfterTaxSpendTarget(
+                  clone.map(s => ({ ...s })),
+                  accounts,
+                  targetSpending,
+                  rmdAmount,
+                  totalRetirementIncome,
+                  profile,
+                  age,
+                  countryConfig,
+                  fixedOrd,
+                  governmentBenefitIncome,
+                  inflatedStreamIncome,
+                  fixedOrd,
+                  bracketInflation,
+                  withdrawalStrategy
+                )
+              : targetSpending;
+            const trial = performTaxOptimizedWithdrawal(
+              clone.map(s => ({ ...s })),
+              accounts,
+              grossSpend,
+              rmdAmount,
+              totalRetirementIncome,
+              profile,
+              {},
+              age,
+              countryConfig,
+              fixedOrd,
+              withdrawalStrategy,
+              bracketInflation
+            );
+            return trial.traditionalWithdrawal;
+          };
 
-          let targetConversion = room;
-          if (conversionSettings.maxAnnualConversion > 0) {
-            targetConversion = Math.min(targetConversion, conversionSettings.maxAnnualConversion);
+          // Fixed-point solve: the conversion may only use the bracket room
+          // that remains after the spending-driven traditional income it
+          // induces (including the gross-up to pay the conversion's own tax).
+          // Converges because each extra $1 converted raises that spending
+          // income by < $1, so the map is contractive.
+          let targetConversion = 0;
+          for (let iter = 0; iter < 12; iter++) {
+            const spendingTrad = spendingTradForConversion(targetConversion);
+            const room = getConversionToTopOfBracket(
+              nonPortfolioTaxableIncome + spendingTrad,
+              conversionSettings.targetBracketRate,
+              filingStatus,
+              bracketInflation
+            );
+            const next = Math.max(
+              0,
+              Math.min(room, conversionCap, totalTraditionalBalance)
+            );
+            if (Math.abs(next - targetConversion) < 1) {
+              targetConversion = next;
+              break;
+            }
+            targetConversion = next;
           }
 
           let remaining = targetConversion;
@@ -490,6 +533,14 @@ export function calculateWithdrawals(
     // ordinary income (traditional withdrawals + conversion + taxable SS/pensions) + capital gains.
     // Excludes tax-free Roth withdrawals so it stays comparable to bracket limits.
     const grossIncome = ordinaryIncome + capitalGains;
+    // taxableIncome = grossIncome after the (inflation-projected) standard
+    // deduction — the amount tax brackets are applied to. Canada applies the
+    // basic personal amount as a credit (not a deduction), so its taxable
+    // income equals gross income.
+    const standardDeductionThisYear = (!countryConfig || countryConfig.code === 'US')
+      ? getStandardDeduction(profile.filingStatus || 'single', bracketInflation)
+      : 0;
+    const taxableIncome = Math.max(0, grossIncome - standardDeductionThisYear);
     // afterTaxIncome = spendable cash: all spending withdrawals (incl. Roth) + SS/pensions - taxes.
     // Conversion is intentionally excluded — it is a balance transfer, not spendable cash.
     const afterTaxIncome = grossWithdrawal + governmentBenefitIncome + inflatedStreamIncome - totalTax;
@@ -510,6 +561,7 @@ export function calculateWithdrawals(
       governmentBenefitIncome,
       incomeStreamIncome: inflatedStreamIncome,
       grossIncome,
+      taxableIncome,
       federalTax,
       stateTax,
       totalTax,
