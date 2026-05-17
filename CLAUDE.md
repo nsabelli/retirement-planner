@@ -45,7 +45,7 @@ This is a React retirement planning calculator that projects portfolio growth an
 ### Key Types (`src/types/index.ts`)
 
 - `Account`: Investment account with balance, contributions, return rate, type (traditional_401k, roth_ira, etc.)
-- `Profile`: User info including ages, filing status, Social Security
+- `Profile`: User info including ages, filing status (with optional `filingStatusChangeAge` / `filingStatusAfterChange` for widow-penalty simulation), Social Security
 - `Assumptions`: Economic parameters (inflation, withdrawal rate, retirement return, withdrawal mode, target monthly spending)
 - `AccumulationResult` / `RetirementResult`: Yearly projections with balances, withdrawals, taxes, effective withdrawal rate
 - `YearlyWithdrawal`: Per-year retirement data including `conversionByAccount` (per-account Roth conversion outflows, separate from spending withdrawals) and `taxBracket` (the year's marginal ordinary-income `TaxBracket` with inflation-projected nominal `min`/`max`)
@@ -62,6 +62,13 @@ This is a React retirement planning calculator that projects portfolio growth an
 - **Country switching via `CountrySelector`**: unchanged — triggers the confirm dialog, then the outer `App.handleCountryChange` writes updated scenario data (with country defaults) to `retirement-planner-scenarios` in localStorage and reloads.
 
 ### Key Features
+
+**Filing Status Change / Widow Penalty (`Profile.filingStatusChangeAge` + `filingStatusAfterChange`):**
+- US-only optional setting in Personal Information: a checkbox ("Filing status changes during retirement") exposes an age input and a target-status dropdown.
+- Adds `filingStatusChangeAge?: number` and `filingStatusAfterChange?: FilingStatus` to `Profile`.
+- In `calculateWithdrawals` (`withdrawals.ts`), each year of the retirement loop computes `effectiveFilingStatus` — if the current age ≥ `filingStatusChangeAge`, the new status applies; otherwise the original `filingStatus` is used.
+- A `yearProfile` is created (shallow-cloned with the overridden `filingStatus`) and passed to every helper that uses filing status: `computeIncomeTaxes`, `performTaxOptimizedWithdrawal`, `solveAfterTaxSpendTarget`, `getStandardDeduction`, `getMarginalBracket`, `getConversionToTopOfBracket`. The Roth-conversion local `filingStatus` variable also uses `effectiveFilingStatus`. This ensures bracket widths, standard deduction, capital-gains thresholds, and Roth-conversion headroom all switch in the correct year.
+- Typical use: MFJ → Single at a specified age to model the higher tax burden a surviving spouse faces (narrower brackets, smaller standard deduction, lower capital-gains thresholds).
 
 **Roth Conversion Strategy (`WithdrawalStrategySettings.rothConversion`):**
 - Runs each year before RMD age; converts from traditional accounts to Roth up to the top of the user-selected tax bracket

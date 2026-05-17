@@ -74,7 +74,16 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
             </label>
             <select
               value={profile.filingStatus}
-              onChange={(e) => handleChange('filingStatus', e.target.value as FilingStatus)}
+              onChange={(e) => {
+                const next = e.target.value as FilingStatus;
+                // Clear the change fields if they no longer make sense
+                const update: Partial<Profile> = { filingStatus: next };
+                if (next === profile.filingStatusAfterChange) {
+                  update.filingStatusChangeAge = undefined;
+                  update.filingStatusAfterChange = undefined;
+                }
+                onChange({ ...profile, ...update });
+              }}
               className={inputClassName}
             >
               <option value="single">Single</option>
@@ -125,6 +134,68 @@ export function ProfileForm({ profile, onChange }: ProfileFormProps) {
               defaultValue={0.05}
               className={inputClassName}
             />
+          </div>
+        )}
+
+        {/* Filing status change — US only (widow/widower penalty simulation) */}
+        {country === 'US' && (
+          <div className="col-span-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={profile.filingStatusChangeAge !== undefined}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    const defaultTarget: FilingStatus =
+                      profile.filingStatus === 'married_filing_jointly' ? 'single' : 'married_filing_jointly';
+                    onChange({
+                      ...profile,
+                      filingStatusChangeAge: Math.max(profile.retirementAge, profile.currentAge + 1),
+                      filingStatusAfterChange: defaultTarget,
+                    });
+                  } else {
+                    const next = { ...profile };
+                    delete next.filingStatusChangeAge;
+                    delete next.filingStatusAfterChange;
+                    onChange(next);
+                  }
+                }}
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
+              />
+              Filing status changes during retirement
+              <Tooltip text="Simulate a future change in filing status — e.g. a surviving spouse switching from Married Filing Jointly to Single (widow/widower penalty)." />
+            </label>
+
+            {profile.filingStatusChangeAge !== undefined && (
+              <div className="grid grid-cols-2 gap-4 mt-3 pl-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    At age
+                  </label>
+                  <NumberInput
+                    value={profile.filingStatusChangeAge}
+                    onChange={(val) => handleChange('filingStatusChangeAge', val)}
+                    min={profile.currentAge}
+                    max={profile.lifeExpectancy}
+                    defaultValue={Math.max(profile.retirementAge, profile.currentAge + 1)}
+                    className={inputClassName}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Change to
+                  </label>
+                  <select
+                    value={profile.filingStatusAfterChange ?? 'single'}
+                    onChange={(e) => handleChange('filingStatusAfterChange', e.target.value as FilingStatus)}
+                    className={inputClassName}
+                  >
+                    <option value="single">Single</option>
+                    <option value="married_filing_jointly">Married Filing Jointly</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

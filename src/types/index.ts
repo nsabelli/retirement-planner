@@ -69,6 +69,8 @@ export interface Profile {
   lifeExpectancy: number;
   region: string; // State code (US) or Province code (CA)
   filingStatus?: FilingStatus; // US only
+  filingStatusChangeAge?: number;    // US only: age at which filing status changes (e.g. widow penalty)
+  filingStatusAfterChange?: FilingStatus; // US only: new filing status after the change age
   stateTaxRate?: number; // US only (as decimal), CA uses province
   annualIncome?: number; // For CA RRSP contribution room calculation
   socialSecurityBenefit?: number; // Canada CPP only; US uses income streams (annual)

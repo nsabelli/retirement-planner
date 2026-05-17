@@ -69,6 +69,12 @@ The withdrawal algorithm follows a tax-efficient strategy:
 7. **Taxable Account Withdrawals**: With capital gains tracking
 8. **HSA**: Used last, tax-free for qualified medical expenses
 
+### Filing Status Change (Widow/Widower Penalty)
+US users can simulate a future filing-status change during retirement — the most common case being a surviving spouse switching from Married Filing Jointly to Single:
+- Enable the **"Filing status changes during retirement"** checkbox in Personal Information.
+- Set the **age** at which the change takes effect and the **new filing status**.
+- From that age onward, all tax calculations (federal brackets, standard deduction, capital gains thresholds, Roth-conversion headroom) switch to the new status, accurately modelling the higher tax burden single filers face relative to MFJ.
+
 ### Tax Calculations
 
 #### United States

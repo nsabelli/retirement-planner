@@ -5,6 +5,7 @@ import {
   AccumulationResult,
   RetirementResult,
   YearlyWithdrawal,
+  FilingStatus,
   getTaxTreatment,
   isTraditional,
   WithdrawalStrategySettings,
@@ -271,6 +272,21 @@ export function calculateWithdrawals(
       Math.max(0, year - TAX_BASE_YEAR)
     );
 
+    // Effective filing status for this year. Supports a simulated future change
+    // (e.g. widow/widower penalty: MFJ → Single at a specified age).
+    const effectiveFilingStatus: FilingStatus =
+      profile.filingStatusChangeAge !== undefined &&
+      profile.filingStatusAfterChange !== undefined &&
+      age >= profile.filingStatusChangeAge
+        ? profile.filingStatusAfterChange
+        : (profile.filingStatus || 'single');
+
+    // Year-specific profile so every helper downstream sees the right filing status.
+    const yearProfile: Profile =
+      effectiveFilingStatus !== (profile.filingStatus || 'single')
+        ? { ...profile, filingStatus: effectiveFilingStatus }
+        : profile;
+
     // Calculate government retirement benefits (Social Security, CPP/OAS, etc.)
     let governmentBenefits = 0;
     if (countryConfig) {
@@ -344,7 +360,7 @@ export function calculateWithdrawals(
         const preRMD = isPreRMDAge(age, firstTraditionalType, countryConfig);
 
         if (preRMD) {
-          const filingStatus = profile.filingStatus || 'single';
+          const filingStatus = effectiveFilingStatus;
           const preConvSnapshot = accountStates.map(s => ({ ...s }));
           const rothId = rothState.id;
           const totalTraditionalBalance = traditionalStates.reduce(
@@ -382,7 +398,7 @@ export function calculateWithdrawals(
                   targetSpending,
                   rmdAmount,
                   totalRetirementIncome,
-                  profile,
+                  yearProfile,
                   age,
                   countryConfig,
                   fixedOrd,
@@ -399,7 +415,7 @@ export function calculateWithdrawals(
               grossSpend,
               rmdAmount,
               totalRetirementIncome,
-              profile,
+              yearProfile,
               {},
               age,
               countryConfig,
@@ -474,7 +490,7 @@ export function calculateWithdrawals(
           targetSpending,
           rmdAmount,
           totalRetirementIncome,
-          profile,
+          yearProfile,
           age,
           countryConfig,
           fixedOrdinaryIncome,
@@ -495,7 +511,7 @@ export function calculateWithdrawals(
       solvedSpendTarget,
       rmdAmount,
       totalRetirementIncome,
-      profile,
+      yearProfile,
       accountDepletionAges,
       age,
       countryConfig,
@@ -520,7 +536,7 @@ export function calculateWithdrawals(
     const { federalTax, stateTax } = computeIncomeTaxes(
       ordinaryIncome,
       capitalGains,
-      profile,
+      yearProfile,
       countryConfig,
       bracketInflation
     );
@@ -528,8 +544,8 @@ export function calculateWithdrawals(
 
     // Marginal ordinary-income bracket for this year (inflation-projected).
     const marginalBracket = countryConfig?.getMarginalBracket
-      ? countryConfig.getMarginalBracket(ordinaryIncome, profile.filingStatus, bracketInflation)
-      : getMarginalBracket(ordinaryIncome, profile.filingStatus || 'single', bracketInflation);
+      ? countryConfig.getMarginalBracket(ordinaryIncome, effectiveFilingStatus, bracketInflation)
+      : getMarginalBracket(ordinaryIncome, effectiveFilingStatus, bracketInflation);
     lifetimeTaxesPaid += totalTax;
 
     const grossWithdrawal = withdrawals.total;
@@ -542,7 +558,7 @@ export function calculateWithdrawals(
     // basic personal amount as a credit (not a deduction), so its taxable
     // income equals gross income.
     const standardDeductionThisYear = (!countryConfig || countryConfig.code === 'US')
-      ? getStandardDeduction(profile.filingStatus || 'single', bracketInflation)
+      ? getStandardDeduction(effectiveFilingStatus, bracketInflation)
       : 0;
     const taxableIncome = Math.max(0, grossIncome - standardDeductionThisYear);
     // afterTaxIncome = spendable cash: all spending withdrawals (incl. Roth) + SS/pensions - taxes.
