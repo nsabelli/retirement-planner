@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { Account, RetirementResult, IncomeStream, IncomeTaxTreatment, getTaxTreatment } from '../types';
 import { CHART_COLORS } from '../utils/constants';
+import { TAX_BRACKETS_MFJ, TAX_BRACKETS_SINGLE } from '../countries/usa/constants';
+import { useCountry } from '../contexts/CountryContext';
 
 interface DataTableWithdrawalProps {
   accounts: Account[];
   result: RetirementResult;
   incomeStreams?: IncomeStream[];
+  inflationRate: number;
 }
+
+const TAX_BASE_YEAR = 2026;
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -21,14 +26,15 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function formatBracketRange(min: number, max: number): string {
-  const lo = formatCurrency(min);
-  return max === Infinity ? `${lo}+` : `${lo} – ${formatCurrency(max)}`;
+function formatBracketRange(min: number, max: number, inflation = 1): string {
+  const lo = formatCurrency(min * inflation);
+  return max === Infinity ? `${lo}+` : `${lo} – ${formatCurrency(max * inflation)}`;
 }
 
-type ViewMode = 'combined' | 'income' | 'withdrawals' | 'balances' | 'taxes' | 'incomeStreams';
+type ViewMode = 'combined' | 'income' | 'withdrawals' | 'balances' | 'taxes' | 'incomeStreams' | 'taxBrackets';
 
-export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: DataTableWithdrawalProps) {
+export function DataTableWithdrawal({ accounts, result, incomeStreams = [], inflationRate }: DataTableWithdrawalProps) {
+  const { country } = useCountry();
   const [isExpanded, setIsExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('combined');
   const [expandedPenaltyRows, setExpandedPenaltyRows] = useState<Set<number>>(new Set());
@@ -78,6 +84,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
     { id: 'balances', label: 'Remaining Balances' },
     { id: 'taxes', label: 'Tax Details' },
     { id: 'incomeStreams', label: 'Income Streams' },
+    ...(country === 'US' ? [{ id: 'taxBrackets' as ViewMode, label: 'Tax Brackets' }] : []),
   ];
 
   const sum = (fn: (y: RetirementResult['yearlyWithdrawals'][number]) => number) =>
@@ -180,8 +187,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                         <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-500">{yearData.totalPenalties > 0 ? formatCurrency(yearData.totalPenalties) : '-'}</td>
                         <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.totalTax)}</td>
                         <td className="py-2 px-2 text-right font-mono text-gray-700 dark:text-gray-300">
-                          <div>{(yearData.taxBracket.rate * 100).toFixed(0)}%</div>
-                          <div className="text-xs text-gray-400 dark:text-gray-500">{formatBracketRange(yearData.taxBracket.min, yearData.taxBracket.max)}</div>
+                          {(yearData.taxBracket.rate * 100).toFixed(0)}%
                         </td>
                         <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(effectiveRate)}</td>
                         <td className="py-2 px-2 text-right font-mono text-teal-600 dark:text-teal-400">{formatCurrency(yearData.afterTaxIncome)}</td>
@@ -428,8 +434,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
                           </td>
                           <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.totalTax)}</td>
                           <td className="py-2 px-2 text-right font-mono text-gray-700 dark:text-gray-300">
-                            <div>{(yearData.taxBracket.rate * 100).toFixed(0)}%</div>
-                            <div className="text-xs text-gray-400 dark:text-gray-500">{formatBracketRange(yearData.taxBracket.min, yearData.taxBracket.max)}</div>
+                            {(yearData.taxBracket.rate * 100).toFixed(0)}%
                           </td>
                           <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatPercent(effectiveRate)}</td>
                         </tr>
@@ -573,6 +578,56 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [] }: Da
               <p className="text-gray-500 dark:text-gray-400 text-sm py-8 text-center">
                 No income streams configured. Add Social Security, pensions, or other income in the Income Streams panel.
               </p>
+            )}
+
+            {viewMode === 'taxBrackets' && (
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700">
+                    <th rowSpan={2} className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800 align-bottom">Age</th>
+                    <th rowSpan={2} className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 align-bottom">Year</th>
+                    <th colSpan={TAX_BRACKETS_SINGLE.length} className="text-center py-1 px-2 font-semibold text-gray-700 dark:text-gray-300 border-l border-gray-200 dark:border-gray-600">
+                      Single
+                    </th>
+                    <th colSpan={TAX_BRACKETS_MFJ.length} className="text-center py-1 px-2 font-semibold text-gray-700 dark:text-gray-300 border-l border-gray-200 dark:border-gray-600">
+                      Married Filing Jointly
+                    </th>
+                  </tr>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    {TAX_BRACKETS_SINGLE.map((b, i) => (
+                      <th key={`s-${b.rate}`} className={`text-right py-1 px-2 font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap ${i === 0 ? 'border-l border-gray-200 dark:border-gray-600' : ''}`}>
+                        {(b.rate * 100).toFixed(0)}%
+                      </th>
+                    ))}
+                    {TAX_BRACKETS_MFJ.map((b, i) => (
+                      <th key={`m-${b.rate}`} className={`text-right py-1 px-2 font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap ${i === 0 ? 'border-l border-gray-200 dark:border-gray-600' : ''}`}>
+                        {(b.rate * 100).toFixed(0)}%
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.yearlyWithdrawals.map((yearData) => {
+                    const inflation = Math.pow(1 + inflationRate, Math.max(0, yearData.year - TAX_BASE_YEAR));
+                    return (
+                      <tr key={yearData.age} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
+                        <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
+                        {TAX_BRACKETS_SINGLE.map((b, i) => (
+                          <td key={`s-${b.rate}`} className={`py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap ${i === 0 ? 'border-l border-gray-200 dark:border-gray-700' : ''}`}>
+                            {formatBracketRange(b.min, b.max, inflation)}
+                          </td>
+                        ))}
+                        {TAX_BRACKETS_MFJ.map((b, i) => (
+                          <td key={`m-${b.rate}`} className={`py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap ${i === 0 ? 'border-l border-gray-200 dark:border-gray-700' : ''}`}>
+                            {formatBracketRange(b.min, b.max, inflation)}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
 

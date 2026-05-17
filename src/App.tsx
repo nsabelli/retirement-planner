@@ -517,7 +517,7 @@ function AppContent() {
                       Retirement Phase (Age {profile.retirementAge} to {profile.lifeExpectancy})
                     </h3>
                   </div>
-                  <DataTableWithdrawal accounts={accounts} result={retirement} incomeStreams={incomeStreams} />
+                  <DataTableWithdrawal accounts={accounts} result={retirement} incomeStreams={incomeStreams} inflationRate={assumptions.inflationRate} />
                 </div>
               )}
 

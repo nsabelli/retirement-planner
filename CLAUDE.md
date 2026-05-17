@@ -70,9 +70,12 @@ This is a React retirement planning calculator that projects portfolio growth an
 - `SummaryCards` now accepts an `accounts: Account[]` prop (passed from `App.tsx`) to resolve per-account tax treatment at longevity
 
 **Year-by-Year Data Table (`DataTableWithdrawal.tsx`) — column definitions:**
+- `DataTableWithdrawal` accepts `inflationRate: number` (passed from `App.tsx`) used to project bracket ranges in the Tax Brackets tab
 - *Income & Spending*: Withdrawals = spending from portfolio (excl. conversion) | Gross Income = `ordinaryIncome + capitalGains` | Taxable Income = `Gross Income − standardDeduction` (inflation-projected) | After-Tax Spendable = portfolio spending + SS/pensions − taxes
 - *Withdrawals by Account*: per-account column = spending withdrawal + Roth conversion outflow; Total = both combined
-- *Tax Details*: Gross Income & Taxable Income as above (separate columns); **Tax Bracket** (after Total Tax) = the year's marginal ordinary-income bracket rate with its inflation-projected nominal `min`/`max` range (from `yearData.taxBracket`); Effective Rate = `totalTax ÷ grossIncome`
+- *Tax Details*: Gross Income & Taxable Income as above (separate columns); **Tax Bracket** (after Total Tax) = the year's marginal ordinary-income bracket **rate only** (e.g. `22%`); Effective Rate = `totalTax ÷ grossIncome`
+- *All Columns*: Tax Bracket column also shows rate only (no range) — ranges are in the Tax Brackets tab
+- *Tax Brackets* (US only): per-year table with two grouped sections (Single | Married Filing Jointly), one column per bracket rate (10%–37%), showing the inflation-projected nominal dollar range for that year. `bracketInflation = (1 + inflationRate)^max(0, year − 2026)` applied to `TAX_BRACKETS_SINGLE` and `TAX_BRACKETS_MFJ` from `src/countries/usa/constants.ts`. Tab is hidden for Canada.
 - The Tax Bracket column also appears in the *All Columns* view, immediately after Total Tax. Lifetime-total footer shows `-` for it.
 
 **Inflation-Indexed Tax Brackets:**
