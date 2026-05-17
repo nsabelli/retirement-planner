@@ -88,10 +88,10 @@ This is a React retirement planning calculator that projects portfolio growth an
 **Withdrawal Target Mode (`Assumptions.withdrawalMode`):**
 - Two modes: `'swr'` (safe withdrawal rate) and `'target_spending'` (target monthly spending in USD)
 - In `swr` mode: `targetSpending = totalPortfolio × safeWithdrawalRate`. This is a **gross** withdrawal — classic SWR semantics; after-tax spendable will be below the target by the tax owed
-- In `target_spending` mode: `targetSpending = targetMonthlySpending × 12` (today's dollars, inflation-adjusted each year). This is an **after-tax** spending goal — the withdrawal is grossed up so `withdrawals + SS/pensions − totalTax ≈ targetSpending`
+- In `target_spending` mode: the user enters `targetMonthlySpending` in **today's dollars**. `initialTargetSpending = targetMonthlySpending × 12 × (1 + inflationRate)^yearsToRetirement` — inflated to the first year of retirement before the simulation starts, so the per-year inflation growth (`targetSpending *= 1 + inflationRate`) continues correctly from there. This is an **after-tax** spending goal — the withdrawal is grossed up so `withdrawals + SS/pensions − totalTax ≈ targetSpending`
 - Gross-up is solved iteratively by `solveAfterTaxSpendTarget` (a larger withdrawal raises taxes, which raises the need). It runs trial withdrawals on cloned account states (never mutates real state), stops at `< $1` shortfall, max 20 iterations, and bails early when the portfolio is exhausted (withdrawal can't grow). Federal/state tax is shared via the extracted `computeIncomeTaxes` helper
-- `effectiveWithdrawalRate` is always returned in `RetirementResult`: equals the SWR in `swr` mode, or `annualTarget / totalPortfolio` in `target_spending` mode
-- Dashboard shows both the monthly withdrawal amount and effective withdrawal rate regardless of mode
+- `effectiveWithdrawalRate` is always returned in `RetirementResult`: equals the SWR in `swr` mode, or `nominalFirstYearAnnual / totalPortfolio` in `target_spending` mode
+- `sustainableMonthlyWithdrawal` / `sustainableAnnualWithdrawal` in `target_spending` mode are the **nominal year-1** amounts (inflation-adjusted). `SummaryCards` displays today's dollars (`targetMonthlySpending`) as the card value and shows the nominal year-1 amount in the expanded detail; the effective withdrawal rate formula uses the nominal year-1 figure ÷ portfolio
 - Toggle UI in `AssumptionsForm.tsx`; mode/target logic in `calculateWithdrawals` and the `solveAfterTaxSpendTarget` / `computeIncomeTaxes` helpers in `withdrawals.ts`
 
 **Configurable Withdrawal Ages:**

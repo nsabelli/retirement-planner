@@ -230,8 +230,12 @@ export function calculateWithdrawals(
 
   const totalPortfolio = accumulationResult.totalAtRetirement;
   const mode = assumptions.withdrawalMode ?? 'swr';
+  // In target_spending mode the user enters today's dollars. Inflate to the
+  // nominal value at the start of retirement so year-by-year inflation growth
+  // continues correctly from there.
+  const yearsToRetirement = Math.max(0, profile.retirementAge - profile.currentAge);
   const initialTargetSpending = mode === 'target_spending' && assumptions.targetMonthlySpending
-    ? assumptions.targetMonthlySpending * 12
+    ? assumptions.targetMonthlySpending * 12 * Math.pow(1 + assumptions.inflationRate, yearsToRetirement)
     : totalPortfolio * assumptions.safeWithdrawalRate;
   let targetSpending = initialTargetSpending;
   const effectiveWithdrawalRate = totalPortfolio > 0 ? initialTargetSpending / totalPortfolio : 0;

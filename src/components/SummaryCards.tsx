@@ -279,11 +279,13 @@ export function SummaryCards({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <ExpandableStatCard
             title="Monthly Withdrawal"
-            value={formatCurrency(sustainableMonthlyWithdrawal)}
+            value={withdrawalMode === 'target_spending'
+              ? formatCurrency(assumptions.targetMonthlySpending ?? 0)
+              : formatCurrency(sustainableMonthlyWithdrawal)}
             subtitle={withdrawalMode === 'target_spending' ? 'After-tax target, today\'s dollars' : 'In today\'s dollars'}
             color="green"
             formula={withdrawalMode === 'target_spending'
-              ? `Target: ${formatCurrency((assumptions.targetMonthlySpending ?? 0))} / month`
+              ? `Target: ${formatCurrency((assumptions.targetMonthlySpending ?? 0))} / month (today's $)`
               : `${formatCurrency(totalAtRetirement)} × ${formatPercent(assumptions.safeWithdrawalRate)} ÷ 12`}
             details={
               <div>
@@ -292,8 +294,13 @@ export function SummaryCards({
                     <p className="mb-1">
                       You set a target of {formatCurrency(assumptions.targetMonthlySpending ?? 0)}/month after-tax in today's dollars.
                     </p>
+                    {yearsToRetirement > 0 && (
+                      <p className="mb-1">
+                        At retirement (age {profile.retirementAge}), inflation-adjusted to {formatCurrency(sustainableMonthlyWithdrawal)}/month in nominal dollars.
+                      </p>
+                    )}
                     <p className="mb-1">
-                      Equivalent effective withdrawal rate: {formatPercent(effectiveWithdrawalRate)} of your {formatCurrency(totalAtRetirement)} portfolio.
+                      Effective withdrawal rate: {formatPercent(effectiveWithdrawalRate)} of your {formatCurrency(totalAtRetirement)} portfolio.
                     </p>
                   </>
                 ) : (
@@ -303,32 +310,43 @@ export function SummaryCards({
                   </p>
                 )}
                 <p>
-                  Actual withdrawals will be adjusted for {formatPercent(assumptions.inflationRate)} annual inflation.
+                  Actual withdrawals grow by {formatPercent(assumptions.inflationRate)} per year during retirement.
                 </p>
               </div>
             }
           />
           <ExpandableStatCard
             title="Annual Withdrawal"
-            value={formatCurrency(sustainableAnnualWithdrawal)}
+            value={withdrawalMode === 'target_spending'
+              ? formatCurrency((assumptions.targetMonthlySpending ?? 0) * 12)
+              : formatCurrency(sustainableAnnualWithdrawal)}
             subtitle={withdrawalMode === 'target_spending' ? 'After-tax target, today\'s dollars' : 'In today\'s dollars'}
             color="green"
             formula={withdrawalMode === 'target_spending'
-              ? `${formatCurrency(assumptions.targetMonthlySpending ?? 0)} × 12`
+              ? `${formatCurrency(assumptions.targetMonthlySpending ?? 0)} × 12 (today's $)`
               : `${formatCurrency(totalAtRetirement)} × ${formatPercent(assumptions.safeWithdrawalRate)}`}
             details={
               <div>
                 {withdrawalMode === 'target_spending' ? (
-                  <p className="mb-1">
-                    = {formatCurrency(assumptions.targetMonthlySpending ?? 0)} × 12 = {formatCurrency(sustainableAnnualWithdrawal)}
-                  </p>
+                  <>
+                    <p className="mb-1">
+                      Today's dollars: {formatCurrency((assumptions.targetMonthlySpending ?? 0) * 12)}/year
+                    </p>
+                    {yearsToRetirement > 0 && (
+                      <p className="mb-1">
+                        Year 1 of retirement (nominal): {formatCurrency(sustainableAnnualWithdrawal)}/year
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <p className="mb-1">
                     = {formatCurrency(totalAtRetirement)} × {formatPercent(assumptions.safeWithdrawalRate)} = {formatCurrency(sustainableAnnualWithdrawal)}
                   </p>
                 )}
                 <p className="text-gray-500 dark:text-gray-400 italic">
-                  This is your initial withdrawal amount. Each year it increases by the inflation rate ({formatPercent(assumptions.inflationRate)}).
+                  {withdrawalMode === 'target_spending'
+                    ? `Grows by ${formatPercent(assumptions.inflationRate)}/year during retirement to maintain purchasing power.`
+                    : `This is your initial withdrawal amount. Each year it increases by the inflation rate (${formatPercent(assumptions.inflationRate)}).`}
                 </p>
               </div>
             }
@@ -336,17 +354,17 @@ export function SummaryCards({
           <ExpandableStatCard
             title={withdrawalMode === 'target_spending' ? 'Effective Withdrawal Rate' : 'Safe Withdrawal Rate'}
             value={formatPercent(withdrawalMode === 'target_spending' ? effectiveWithdrawalRate : assumptions.safeWithdrawalRate)}
-            subtitle={withdrawalMode === 'target_spending' ? 'Derived from spending target' : 'Configured rate'}
+            subtitle={withdrawalMode === 'target_spending' ? 'Year 1 of retirement ÷ portfolio' : 'Configured rate'}
             color="teal"
             formula={withdrawalMode === 'target_spending'
-              ? `${formatCurrency((assumptions.targetMonthlySpending ?? 0) * 12)} ÷ ${formatCurrency(totalAtRetirement)}`
+              ? `${formatCurrency(sustainableAnnualWithdrawal)} ÷ ${formatCurrency(totalAtRetirement)}`
               : `Configured as ${formatPercent(assumptions.safeWithdrawalRate)}`}
             details={
               <div>
                 {withdrawalMode === 'target_spending' ? (
                   <>
                     <p className="mb-1">
-                      Annual target: {formatCurrency((assumptions.targetMonthlySpending ?? 0) * 12)}
+                      Year 1 nominal withdrawal: {formatCurrency(sustainableAnnualWithdrawal)}
                     </p>
                     <p className="mb-1">
                       Portfolio at retirement: {formatCurrency(totalAtRetirement)}
