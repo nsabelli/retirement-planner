@@ -392,6 +392,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [], infl
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-800">Age</th>
                     <th className="text-left py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Year</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Gross Income</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400">Std. Deduction</th>
                     <th className="text-right py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Taxable Income</th>
                     <th className="text-right py-2 px-2 font-medium text-red-600 dark:text-red-400">Federal Tax</th>
                     <th className="text-right py-2 px-2 font-medium text-orange-600 dark:text-orange-400">State Tax</th>
@@ -412,6 +413,11 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [], infl
                           <td className="py-2 px-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800">{yearData.age}</td>
                           <td className="py-2 px-2 text-gray-600 dark:text-gray-400">{yearData.year}</td>
                           <td className="py-2 px-2 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(yearData.grossIncome)}</td>
+                          <td className="py-2 px-2 text-right font-mono text-gray-500 dark:text-gray-400">
+                            {yearData.grossIncome - yearData.taxableIncome > 0
+                              ? `(${formatCurrency(yearData.grossIncome - yearData.taxableIncome)})`
+                              : '-'}
+                          </td>
                           <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatCurrency(yearData.taxableIncome)}</td>
                           <td className="py-2 px-2 text-right font-mono text-red-600 dark:text-red-400">{formatCurrency(yearData.federalTax)}</td>
                           <td className="py-2 px-2 text-right font-mono text-orange-600 dark:text-orange-400">{formatCurrency(yearData.stateTax)}</td>
@@ -440,7 +446,7 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [], infl
                         </tr>
                         {hasPenalties && isPenaltyExpanded && yearData.earlyWithdrawalPenalties.length > 0 && (
                           <tr key={`${yearData.age}-penalties`} className="border-b border-gray-100 dark:border-gray-800 bg-red-50 dark:bg-red-900/10">
-                            <td colSpan={8} className="py-2 px-2">
+                            <td colSpan={9} className="py-2 px-2">
                               <div className="pl-4 border-l-2 border-red-300 dark:border-red-700">
                                 <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Early Withdrawal Penalty Details:</p>
                                 {yearData.earlyWithdrawalPenalties.map((penalty, idx) => (
@@ -465,6 +471,9 @@ export function DataTableWithdrawal({ accounts, result, incomeStreams = [], infl
                     <td className="py-2 px-2 text-gray-600 dark:text-gray-400">-</td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-gray-900 dark:text-white">
                       {formatCurrency(totalGrossIncome)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-medium text-gray-500 dark:text-gray-400">
+                      ({formatCurrency(totalGrossIncome - totalTaxableIncome)})
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-medium text-gray-600 dark:text-gray-400">
                       {formatCurrency(totalTaxableIncome)}
